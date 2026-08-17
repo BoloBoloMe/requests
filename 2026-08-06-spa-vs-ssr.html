@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>两条小径: 全自研 SPA 与轻量 SSR 的深入对比</title>
+<style>
+  :root{
+    --paper:#f6f1e7;
+    --paper-deep:#efe8d9;
+    --ink:#2b2a26;
+    --muted:#8a8375;
+    --line:#c9beab;
+    --accent:#7a5c3e;
+    --a-hue:#4f6b57;
+    --b-hue:#8a6d4a;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Serif SC','Spectral',"Songti SC",serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.9;
+    margin:0;
+    padding:0 0 18vh 0;
+  }
+  .wrap{max-width:46rem;margin:0 auto;padding:0 1.4rem;position:relative;z-index:2;}
+  h1{
+    font-size:1.9rem;font-weight:600;letter-spacing:.06em;
+    margin:10vh 0 1rem 0;line-height:1.5;
+  }
+  .subtitle{color:var(--muted);font-style:italic;font-family:'Spectral','Noto Serif SC',serif;letter-spacing:.12em;font-size:.95rem;margin-bottom:6vh;}
+  h2{
+    font-size:1.3rem;font-weight:600;letter-spacing:.08em;
+    margin:5.5rem 0 1.2rem 0;padding-bottom:.4rem;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 4' preserveAspectRatio='none'%3E%3Cpath d='M0 2 C 20 1, 40 3, 60 2 S 90 1.5, 100 2' fill='none' stroke='%23c9beab' stroke-width='1'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:left bottom;background-size:100% 4px;
+  }
+  h3{font-size:1.05rem;margin:2.2rem 0 .6rem 0;color:var(--accent);letter-spacing:.05em;}
+  p{margin:.9rem 0;}
+  ul,ol{padding-left:1.5rem;}
+  li{margin:.35rem 0;}
+  .toc{columns:2;column-gap:2.5rem;list-style:none;padding:0;margin:2rem 0 0 0;}
+  .toc li{margin:.5rem 0;break-inside:avoid;}
+  .toc a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line);}
+  .toc a:hover,.toc a:focus{border-bottom-color:var(--ink);}
+  .toc .num{color:var(--muted);font-family:'Spectral',serif;font-style:italic;margin-right:.5em;}
+  a{color:var(--accent);}
+  .callout{
+    border-left:2px solid var(--accent);
+    padding:.2rem 0 .2rem 1.1rem;
+    margin:1.6rem 0;
+    color:var(--ink);
+  }
+  .callout .tag{font-family:'Spectral',serif;font-style:italic;color:var(--accent);font-size:.85rem;letter-spacing:.15em;display:block;margin-bottom:.2rem;}
+  .muted{color:var(--muted);}
+  figure{margin:2.2rem 0;text-align:center;}
+  figcaption{font-size:.88rem;color:var(--muted);margin-top:.6rem;font-style:italic;}
+  svg{max-width:100%;height:auto;}
+  .pair{display:flex;flex-wrap:wrap;gap:2rem;justify-content:center;}
+  .pair > figure{flex:1 1 300px;min-width:280px;margin:1rem 0;}
+  pre{
+    background:var(--paper-deep);
+    border-left:2px solid var(--line);
+    padding:.9rem 1.1rem;
+    font-size:.82rem;line-height:1.65;
+    overflow-x:auto;
+    white-space:pre-wrap;
+    font-family:'SF Mono',Menlo,Consolas,monospace;
+  }
+  code{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:.9em;}
+  p code,li code{background:var(--paper-deep);padding:.05em .35em;}
+  table{
+    width:100%;border-collapse:collapse;margin:1.8rem 0;
+    font-size:.92rem;line-height:1.7;
+  }
+  th,td{padding:.7rem .8rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);}
+  thead th{border-bottom:1px solid var(--ink);font-weight:600;letter-spacing:.05em;}
+  td.dim{font-weight:600;white-space:nowrap;}
+  tr.same{transition:opacity .3s;}
+  body.only-diff tr.same{display:none;}
+  .legend-note{font-size:.85rem;color:var(--muted);}
+  .filterbar{margin:1rem 0 .2rem 0;}
+  button{
+    font:inherit;background:none;border:1px solid var(--ink);
+    padding:.35rem 1rem;cursor:pointer;border-radius:2px;
+    color:var(--ink);letter-spacing:.05em;
+  }
+  button[aria-pressed="true"]{background:var(--ink);color:var(--paper);}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  details{margin:1.2rem 0;}
+  summary{cursor:pointer;color:var(--accent);}
+  summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .story{display:flex;flex-wrap:wrap;gap:2.5rem;}
+  .story > div{flex:1 1 19rem;min-width:17rem;}
+  .story h3{margin-top:0;}
+  .story ol{padding-left:1.3rem;}
+  .story li{margin:.7rem 0;}
+  .verdict{font-style:italic;color:var(--muted);font-size:.9rem;}
+  .hero-art{display:block;margin:4vh auto 0 auto;max-width:34rem;}
+  .q-list{list-style:none;padding:0;counter-reset:q;}
+  .q-list li{
+    counter-increment:q;margin:1.6rem 0;padding-left:3rem;position:relative;
+  }
+  .q-list li::before{
+    content:counter(q);
+    position:absolute;left:0;top:.15em;
+    width:1.8rem;height:1.8rem;border:1px solid var(--ink);border-radius:50%;
+    display:grid;place-items:center;font-family:'Spectral',serif;font-style:italic;
+  }
+  @media (max-width:40rem){
+    .toc{columns:1;}
+    h1{font-size:1.5rem;}
+    table{font-size:.85rem;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<h1>两条小径</h1>
+<p class="subtitle">全自研 SPA (A) 与轻量 SSR (B) — 写给零基础者的深入对比</p>
+
+<svg class="hero-art" viewBox="0 0 520 210" aria-hidden="true">
+  <g fill="none" stroke="#c9beab" stroke-width="1.5" stroke-linecap="round">
+    <path d="M40 190 C 120 180, 180 160, 230 120" />
+    <path d="M230 120 C 260 95, 280 70, 300 40 C 310 25, 330 18, 350 16" />
+    <path d="M230 120 C 270 118, 320 122, 370 118" stroke-dasharray="1 7"/>
+    <path d="M300 40 l -6 -14 M300 40 l 12 -10" />
+    <path d="M355 12 h 44 M355 22 h 30" stroke-width="1"/>
+    <path d="M377 12 v -8" stroke-width="1"/>
+    <circle cx="455" cy="45" r="16" stroke-width="1.2"/>
+    <path d="M455 22 v 6 M455 62 v 6 M432 45 h 6 M472 45 h 6" stroke-width="1.2"/>
+    <path d="M395 128 c 4 -8, 8 -8, 12 0 M415 132 c 4 -8, 8 -8, 12 0 M435 126 c 4 -8, 8 -8, 12 0" stroke-width="1"/>
+  </g>
+  <g font-family="'Noto Serif SC',serif" font-size="12" fill="#8a8375">
+    <text x="405" y="20">A · 有路标</text>
+    <text x="380" y="146">B · 人迹罕至</text>
+  </g>
+</svg>
+
+<ul class="toc">
+  <li><span class="num">i.</span><a href="#same">同根: 八成已经重叠</a></li>
+  <li><span class="num">ii.</span><a href="#model">心智模型: 页面是怎么活起来的</a></li>
+  <li><span class="num">iii.</span><a href="#glossary">名词表</a></li>
+  <li><span class="num">iv.</span><a href="#story">同一个故事讲两遍</a></li>
+  <li><span class="num">v.</span><a href="#ruler">一把尺子: 逐维对比</a></li>
+  <li><span class="num">vi.</span><a href="#risk">风险肖像: 何时咬人</a></li>
+  <li><span class="num">vii.</span><a href="#questions">收敛成三个问题</a></li>
+</ul>
+
+<h2 id="same">一, 同根: 八成已经重叠</h2>
+
+<p>先卸下最大的心理负担: 这次选择没有你想象的那么重. 无论走哪条路, 下面这些都<strong>一模一样</strong> — 它们是这个工具的躯干, 而 A/B 之争只涉及脸面.</p>
+
+<ul>
+  <li><strong>Python 服务端代理执行请求.</strong> 浏览器受同源策略 (CORS) 限制, 不能随意向任意服务器发请求, 所以两条路都由你的 Python 后端代发. 选型已定为 httpx, 无争议.</li>
+  <li><strong>测试引擎.</strong> 断言用 jmespath 取值 + 比较符 + jsonschema 整体验证; 集合批量运行是自研薄层; 进 CI 时用 subprocess 跑 pytest 出 JUnit 报告.</li>
+  <li><strong>数据.</strong> 集合与环境变量存在本地, 单用户, 无账号, 无云端.</li>
+  <li><strong>运行时形态.</strong> 任何装了 uv 的机器 <code>uv run</code> 即起. 两条路在运行时都不需要 node.</li>
+</ul>
+
+<div class="callout">
+  <span class="tag">一句顶一万句</span>
+  分歧只在最后一层: <strong>网页上那些不刷新就发生的变化, 由谁驱动.</strong> 其他所有差异 — 成本, 风险, 维护 — 都是这一个选择的推论.
+</div>
+
+<h2 id="model">二, 心智模型: 页面是怎么活起来的</h2>
+
+<p>一个网页最初只是服务端送来的一份 HTML 文档, 像一张打印好的纸. 让它 "活" 起来 — 点按钮出结果, 加一行请求头不刷新页面 — 有两派做法.</p>
+
+<p><strong>派别 A: 浏览器里住着一个应用.</strong> 服务端第一次送来的不是纸, 而是一整个 JavaScript 程序 (这就是 SPA, 单页应用). 此后页面上的每个字, 每行请求头, 每个标签页都活在这个程序的内存里; 服务端退化为仓库和信使 — 只管存取数据和代发请求, 对界面长什么样一无所知. Vue 就是写这种程序的主流框架.</p>
+
+<p><strong>派别 B: 服务端是大脑, 浏览器是脸面.</strong> 服务端送来的始终是 HTML, 每次有变化, 就把变化那一小块的新 HTML 再送过来 (htmx 干这个). 只有一类状态例外: 还没发送的请求草稿 — 你正在敲的字 — 交给页面上几小块独立的 JavaScript "岛" 临时记住 (Alpine 干这个), 提交时一次性交还给服务端.</p>
+
+<div class="pair">
+<figure>
+<svg viewBox="0 0 360 200" role="img" aria-label="A 架构: 状态在浏览器">
+  <g fill="none" stroke="#2b2a26" stroke-width="1.3">
+    <path d="M12 30 C 60 26, 140 28, 200 30 L 202 150 C 140 154, 60 152, 12 150 Z"/>
+    <path d="M236 55 C 280 51, 320 53, 348 55 L 350 125 C 310 128, 270 127, 236 125 Z"/>
+    <path d="M204 78 C 214 76, 222 76, 232 78" marker-end="url(#arr)"/>
+    <path d="M232 102 C 222 104, 214 104, 204 102" marker-end="url(#arrL)"/>
+  </g>
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2b2a26" stroke-width="1"/></marker>
+    <marker id="arrL" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2b2a26" stroke-width="1"/></marker>
+  </defs>
+  <g font-family="'Noto Serif SC',serif" fill="#2b2a26">
+    <text x="24" y="52" font-size="13" font-weight="bold">浏览器</text>
+    <text x="24" y="72" font-size="11" fill="#4f6b57">JS 应用 (Vue) ●●●</text>
+    <text x="24" y="90" font-size="10.5" fill="#8a8375">draft: { url: "/users/1",</text>
+    <text x="24" y="104" font-size="10.5" fill="#8a8375">&#160;&#160;headers: 2 行, 标签页 ×3 }</text>
+    <text x="24" y="126" font-size="10.5" fill="#8a8375">响应树也在此渲染</text>
+    <text x="248" y="76" font-size="12" font-weight="bold">Python 服务端</text>
+    <text x="248" y="94" font-size="10.5" fill="#8a8375">无状态: 存取集合</text>
+    <text x="248" y="108" font-size="10.5" fill="#8a8375">代发请求 (httpx)</text>
+  </g>
+  <text x="204" y="68" font-size="9.5" fill="#8a8375" font-family="'Noto Serif SC',serif">JSON 去</text>
+  <text x="204" y="118" font-size="9.5" fill="#8a8375" font-family="'Noto Serif SC',serif">JSON 回</text>
+  <circle cx="196" cy="66" r="4" fill="#4f6b57"/>
+  <text x="14" y="172" font-size="10" fill="#4f6b57" font-family="'Noto Serif SC',serif">● 状态 (真相源) 住在浏览器</text>
+</svg>
+<figcaption>A · 浏览器里住着一个应用</figcaption>
+</figure>
+
+<figure>
+<svg viewBox="0 0 360 200" role="img" aria-label="B 架构: 状态在服务端">
+  <g fill="none" stroke="#2b2a26" stroke-width="1.3">
+    <path d="M12 30 C 60 26, 140 28, 200 30 L 202 150 C 140 154, 60 152, 12 150 Z"/>
+    <path d="M236 30 C 280 26, 320 28, 348 30 L 350 150 C 310 153, 270 152, 236 150 Z"/>
+    <path d="M204 78 C 214 76, 222 76, 232 78" marker-end="url(#arr2)"/>
+    <path d="M232 102 C 222 104, 214 104, 204 102" marker-end="url(#arrL2)"/>
+  </g>
+  <defs>
+    <marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2b2a26" stroke-width="1"/></marker>
+    <marker id="arrL2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#2b2a26" stroke-width="1"/></marker>
+  </defs>
+  <g font-family="'Noto Serif SC',serif" fill="#2b2a26">
+    <text x="24" y="52" font-size="13" font-weight="bold">浏览器</text>
+    <text x="24" y="72" font-size="11" fill="#8a6d4a">表单 (服务端渲染)</text>
+    <text x="24" y="90" font-size="10.5" fill="#8a8375">岛: 草稿 ● (Alpine)</text>
+    <text x="24" y="104" font-size="10.5" fill="#8a8375">其余区域没有记性</text>
+    <text x="24" y="126" font-size="10.5" fill="#8a8375">响应 = 送来的 HTML 片段</text>
+    <text x="248" y="52" font-size="12" font-weight="bold">Python 服务端</text>
+    <text x="248" y="70" font-size="11" fill="#8a6d4a">大脑 ●●●</text>
+    <text x="248" y="88" font-size="10.5" fill="#8a8375">集合/环境 = 数据库</text>
+    <text x="248" y="102" font-size="10.5" fill="#8a8375">Jinja 模板渲染</text>
+    <text x="248" y="116" font-size="10.5" fill="#8a8375">代发请求 (httpx)</text>
+  </g>
+  <text x="204" y="68" font-size="9.5" fill="#8a8375" font-family="'Noto Serif SC',serif">表单去</text>
+  <text x="196" y="118" font-size="9.5" fill="#8a8375" font-family="'Noto Serif SC',serif">HTML 回</text>
+  <circle cx="338" cy="44" r="4" fill="#8a6d4a"/>
+  <text x="14" y="172" font-size="10" fill="#8a6d4a" font-family="'Noto Serif SC',serif">● 状态 (真相源) 住在服务端, 岛上只有草稿</text>
+</svg>
+<figcaption>B · 服务端是大脑, 页面上只有几座岛</figcaption>
+</figure>
+</div>
+
+<p class="legend-note">图例: 方框 = 进程, 箭头 = 数据流, ● = 界面状态的住所. 两图共用同一图例.</p>
+
+<h2 id="glossary">三, 名词表</h2>
+
+<p>后文只用这些词, 每个一行.</p>
+
+<ul>
+  <li><strong>SPA</strong> (单页应用): 整个界面是一个 JavaScript 程序, 页面不整刷, 全由程序局部更新.</li>
+  <li><strong>Vue</strong>: 写 SPA 的主流框架之一, 资料最多, 同类工具 Hoppscotch 即用它.</li>
+  <li><strong>node 构建链</strong>: 开发期工具 — 把 Vue 源码打包成浏览器能吃的静态文件. <em>只在开发时存在</em>, 部署产物是纯静态文件, 运行时无需 node.</li>
+  <li><strong>htmx</strong>: 一个小库, 让 "点按钮 → 服务端返回一段 HTML → 局部替换" 不用自己写 JS.</li>
+  <li><strong>Alpine</strong>: 一个小库, 在 HTML 里直接写少量 JS 状态 (做 "岛").</li>
+  <li><strong>Jinja</strong>: Python 的 HTML 模板引擎, 服务端把数据填进模板生成 HTML.</li>
+  <li><strong>vendored</strong>: 把 JS 库文件直接下载放进自己项目, 不依赖 CDN, 不依赖构建.</li>
+  <li><strong>先例</strong>: 已经有人用同样技术做过同类产品 — 遇到坑可以抄答案.</li>
+</ul>
+
+<h2 id="story">四, 同一个故事讲两遍</h2>
+
+<p>场景: 你加一行请求头 <code>Accept: application/json</code>, 点发送, 看返回的 JSON.</p>
+
+<div class="story">
+<div>
+<h3>A · SPA 版本</h3>
+<ol>
+  <li>打开页面时, 浏览器已加载整个 JS 应用.</li>
+  <li>你敲的每个键只改浏览器内存里的草稿对象, 服务端毫不知情.</li>
+  <li>点发送 → JS 把草稿打包成 JSON, POST 给本地 Python.</li>
+  <li>Python 用 httpx 发给目标服务器, 拿到响应, 原样还给浏览器.</li>
+  <li>JS 把响应渲染成可折叠的树. 全程页面未刷新, 服务端不知道界面长什么样.</li>
+</ol>
+<details>
+<summary>代码骨架 (以后回看, 现在可不读)</summary>
+<pre>&lt;script setup&gt;
+const draft = ref({ headers: [{ key: 'Accept', value: 'application/json' }] })
+const response = ref(null)
+async function send() {
+  response.value = await fetch('/api/execute', {
+    method: 'POST', body: JSON.stringify(draft.value)
+  }).then(r =&gt; r.json())
+}
+&lt;/script&gt;</pre>
+</details>
+</div>
+<div>
+<h3>B · SSR 版本</h3>
+<ol>
+  <li>打开页面时, 服务端送来一张渲染好的表单 + 几小块 JS 岛.</li>
+  <li>你敲键时, 一座岛 (Alpine) 在浏览器里记住草稿 — 因为逐键问服务端会卡.</li>
+  <li>点发送 → 岛把草稿序列化进表单, 整个表单提交给 Python.</li>
+  <li>Python 执行请求, 然后<strong>自己把响应渲染成一段 HTML</strong>.</li>
+  <li>htmx 把这段 HTML 塞回页面指定位置. 页面也未整刷, 但响应的 "长相" 由服务端决定.</li>
+</ol>
+<details>
+<summary>代码骨架 (以后回看, 现在可不读)</summary>
+<pre>&lt;form hx-post="/requests/send" hx-target="#response"&gt;
+  &lt;div x-data="{ rows: [{key:'Accept', value:'application/json'}] }"&gt;
+    &lt;template x-for="row in rows"&gt;…&lt;/template&gt;
+    &lt;input type="hidden" name="headers" :value="JSON.stringify(rows)"&gt;
+  &lt;/div&gt;
+  &lt;button&gt;发送&lt;/button&gt;
+&lt;/form&gt;
+&lt;div id="response"&gt;&lt;!-- 服务端渲染的响应片段 --&gt;&lt;/div&gt;</pre>
+</details>
+</div>
+</div>
+
+<div class="callout">
+  <span class="tag">手感差异 &gt; 代码量差异</span>
+  同一件事, A 的心智是 "我在写一个应用", B 的心智是 "我在写一张表单和几座岛". B 每加一个交互都要回答一次 "这事服务端做还是岛做" — 这个问题没有护栏, 答错了复杂度就开始复利.
+</div>
+
+<h2 id="ruler">五, 一把尺子: 逐维对比</h2>
+
+<div class="filterbar">
+  <button id="diffBtn" aria-pressed="false">只看分歧</button>
+  <span class="legend-note"> (相同项已标出, 可隐藏)</span>
+</div>
+
+<table>
+  <thead>
+    <tr><th>维度</th><th>A · 全自研 SPA (Vue)</th><th>B · 轻量 SSR (htmx + Alpine)</th></tr>
+  </thead>
+  <tbody>
+    <tr class="same">
+      <td class="dim">后端策略</td>
+      <td colspan="2">相同: httpx 执行 + 结构化断言 + 自研 runner, 数据本地, <code>uv run</code> 即起, 运行时无 node</td>
+    </tr>
+    <tr class="same">
+      <td class="dim">运行时形态</td>
+      <td colspan="2">相同: 部署产物 = Python + 静态文件, 任何有 uv 的设备即起</td>
+    </tr>
+    <tr>
+      <td class="dim">体验上限</td>
+      <td>高 — 对标 Postman 的顺滑, 4 个开源先例验证可行</td>
+      <td>中高 — htmx 官方自己承认与 SPA 存在交互差距; 对自用工具够用</td>
+    </tr>
+    <tr>
+      <td class="dim">学习成本 <span class="legend-note">(零基础)</span></td>
+      <td>要学 Vue + JS 工具链 — 量大, 但每一步都有教程/先例/AI 熟门熟路</td>
+      <td>不学框架, 但要学 "服务端 vs 岛" 的边界判断 — 量少, 却是最难补的判断力, 且无处抄</td>
+    </tr>
+    <tr>
+      <td class="dim">开发成本</td>
+      <td>MVP 约 6-10 周; 组件全有成熟库可借, 自研面 30-50%</td>
+      <td>省掉构建链, 但模板工作量 +30~50%, 且岛边界要自己建模</td>
+    </tr>
+    <tr>
+      <td class="dim">维护成本</td>
+      <td>node 链是例行家务: 锁版本 + 季度升级约 0.5-1 天, 跟进 CVE</td>
+      <td>极低: 依赖是几个 vendored 文件, 替换即升级</td>
+    </tr>
+    <tr>
+      <td class="dim">同场景先例</td>
+      <td>4 个 (Hoppscotch, Bruno, Insomnia, Yaak), 组件清单可照抄</td>
+      <td>0 个 — 没有任何用 htmx 做 API 客户端的已知案例</td>
+    </tr>
+    <tr>
+      <td class="dim">头号风险</td>
+      <td>事务性风险: 停更库, 本地 dev server CVE — 都有例行解法</td>
+      <td>架构性风险: 岛边界失控, 复杂度反超 SPA — 无护栏, 只能重写</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="risk">六, 风险肖像: 何时咬人</h2>
+
+<h3>A 的风险 — 事务性, 有例行解法</h3>
+<ul>
+  <li><strong>抄到过时的零件.</strong> 有些著名库已停更 (react-json-view) 或停售 (Shoelace). 解法: 照抄 Hoppscotch 的现役依赖清单, 不抄老教程.</li>
+  <li><strong>本地开发服务的攻击面.</strong> Vite/esbuild 累计 20+ 个 CVE, 恶意网页可攻击你挂着的 127.0.0.1 dev server. 解法: 定期升级, 属例行家务.</li>
+  <li><strong>流式 API (SSE/WebSocket) 难.</strong> 经 Python 代理的流式转发要自己造. 解法: v1 先砍, REST 先行.</li>
+</ul>
+
+<h3>B 的风险 — 架构性, 无护栏</h3>
+<ul>
+  <li><strong>岛边界失控.</strong> 每个交互都要判断 "服务端做还是岛做". 判断错得多了, 状态在两边重复建模, 复杂度反超 SPA — Gumroad 的工具型产品正是因此弃坑 htmx. 这是 B 的头号风险, 且对零基础者最致命: 这种判断力恰是新手期最短缺的东西.</li>
+  <li><strong>编辑器零件的版本坑.</strong> 代码编辑器 (CodeMirror 6) 无构建链集成时, 版本错位会直接崩溃. 解法存在 (单源 vendored), 但属于 "踩过才知道".</li>
+  <li><strong>无人区.</strong> 零先例意味着搜索引擎和 AI 都给不出同场景答案, 每个坑都是首踩. 缓解: 先做三个小实验 (spike) 再正式开工.</li>
+</ul>
+
+<h2 id="questions">七, 收敛成三个问题</h2>
+
+<ol class="q-list">
+  <li><strong>你更怕哪种麻烦?</strong> 例行家务 (A: 定期升级依赖, 有清单可循) — 还是无人区探路 (B: 遇到坑没有答案可搜, 全靠自己)?</li>
+  <li><strong>你要的体验是哪档?</strong> "接近 Postman 的顺滑" → A; "够用就好" → B 也够.</li>
+  <li><strong>你对 node 构建链的厌恶有多深?</strong> 它只是开发期存在, 产物仍是纯静态文件; 若这仍不可接受 → B, 但请先 spike.</li>
+</ol>
+
+<div class="callout">
+  <span class="tag">我的判断 (决定权在你)</span>
+  对零基础者, 我倾向 <strong>A (Vue 3)</strong>. 理由: B 省下的维护成本要靠 "岛边界" 的架构判断力才能兑现, 而那恰是新手期最短缺的; A 的风险全是事务性的, 且四个先例 + 最大生态意味着你遇到的每个坑都有人踩过, 有答案可抄. 零基础时, "每一步都有参照物" 比 "少装一条工具链" 值钱得多. 若选 A: 照抄 Hoppscotch 依赖清单, v1 砍掉 SSE/WebSocket.
+</div>
+
+</div>
+
+<script>
+(function(){
+  window.__PRESENTATION_STATE__ = { version: 1, values: { filter: "all" } };
+  var btn = document.getElementById('diffBtn');
+  btn.addEventListener('click', function(){
+    var onlyDiff = document.body.classList.toggle('only-diff');
+    btn.setAttribute('aria-pressed', String(onlyDiff));
+    btn.textContent = onlyDiff ? '显示全部' : '只看分歧';
+    window.__PRESENTATION_STATE__.values.filter = onlyDiff ? 'diff' : 'all';
+  });
+})();
+</script>
+
+</body>
+</html>
