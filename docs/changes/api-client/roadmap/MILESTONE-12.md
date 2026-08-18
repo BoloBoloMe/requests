@@ -4,7 +4,7 @@
 
 ## 问题
 
-自研测试后端服务 (决策见 [D011](../../milestone-01/DECISIONS.md)). 定位 = 开发夹具而非产品功能, `uv run` 可起, 兼任 dogfooding 对象与 demo.
+自研测试后端服务 (决策见 [D011](../milestone-01/DECISIONS.md)). 定位 = 开发夹具而非产品功能, `uv run` 可起, 兼任 dogfooding 对象与 demo.
 
 覆盖面 = v1 全部能力面:
 

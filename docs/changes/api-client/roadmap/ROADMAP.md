@@ -22,10 +22,11 @@
 - [MILESTONE-01](MILESTONE-01.md) — v1 范围界定: HTTP/REST only + SSE 流式渲染; 认证五种 + 砍 oauth2 交互流程; 零导入 (hurl 走一次性外挂脚本); 砍 JS 脚本 (结构化断言 DSL); 两级变量 + 白名单动态变量 $now/$uuid; 测试后端随仓库. 产物: [DECISIONS.md](../milestone-01/DECISIONS.md), ADR [0001](../../../adr/0001-refuse-node-runtime-drop-postman-js-scripts.md)/[0002](../../../adr/0002-zero-importers-one-off-migration-script.md), [领域语言](../../../language/UBIQUITOUS_LANGUAGE.md)
 - [MILESTONE-07](MILESTONE-07.md) — 实时协议流式转发调研: 激活条件未满足 (MILESTONE-01 砍 WS/gRPC, SSE 仅保留响应查看器流式渲染), 考察点并入未决迷雾 "实时协议二期形状"
 - [MILESTONE-02](MILESTONE-02.md) — 数据存储与集合格式: 每请求一 YAML 文件 (version 字段, YAML 子集), 数据仓库布局 (collections/environments/files/.local), frontmatter seq 排序, 集合一级默认继承, 环境进 git + secrets gitignored, 文本传输历史 append 落盘. 产物: [DECISIONS.md](../milestone-02/DECISIONS.md), [ADR 0003](../../../adr/0003-yaml-per-request-format.md)
+- [MILESTONE-03](MILESTONE-03.md) — 后端核心架构: CLI 瘦客户端 + 幂等拉起常驻服务 (launch 模块共享), 执行引擎内嵌服务进程 (async httpx, 无独立代理), SSE/JSONL 单一事件流, 六模块边界 (Store/Resolve/Engine/Assert/Runner/Sync), REST+RPC 混合 API, 本地安全五件套 (绑回环/Host 白名单/禁 CORS/启动 token/CSP), dist 入库, v1 仅 POSIX. 产物: [DECISIONS.md](../milestone-03/DECISIONS.md), [RESEARCH-local-security.md](../milestone-03/RESEARCH-local-security.md), ADR [0004](../../../adr/0004-thin-cli-service-convergence.md)/[0005](../../../adr/0005-commit-spa-dist.md), [领域语言](../../../language/UBIQUITOUS_LANGUAGE.md)
 
 ## 前沿
 
-- [MILESTONE-03](MILESTONE-03.md) — `deliberate` — 后端核心架构. 输入约束: MILESTONE-02 账本 (数据格式/变量优先级/继承语义)
+- [MILESTONE-04](MILESTONE-04.md) — `prototype` — AI CLI 外壳原型: 命令面/结构化输出/退出码/可发现性. 输入约束: MILESTONE-03 账本 (瘦客户端/幂等拉起/SSE+JSONL 事件流)
 - [MILESTONE-12](MILESTONE-12.md) — `task` — 自研测试后端: 开发夹具, 覆盖 v1 全能力面 (五认证/SSE/动态值/边界)
 - [MILESTONE-06](MILESTONE-06.md) — `prototype` — 断言 DSL 原型: jmespath + 比较符 + jsonschema
 - [MILESTONE-05](MILESTONE-05.md) — `prototype` — SPA 界面原型: 请求构建器/集合树/响应查看器/批量运行面板/git 入口
