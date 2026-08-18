@@ -28,8 +28,20 @@ _避免_: 函数, 表达式, 钩子
 _避免_: 测试脚本, test script
 
 **外壳** (Shell):
-产品的交互界面, 共两个: SPA 供人, CLI 供 AI. 外壳不含核心逻辑, 全部能力在 Python 后端本体.
+产品的交互界面, 共两个: SPA 供人, CLI 供 AI. 外壳不含核心逻辑, 全部能力在 **核心库**; CLI 是瘦客户端, 必须连 **服务** 才能工作.
 _避免_: 前端, 客户端 (指整体产品时)
+
+**核心库** (Core Library):
+产品逻辑本体的 Python 库: Store/Resolve/Engine/Assert/Runner/Sync 六个模块; 唯一消费者是 **服务** (CLI 不 import, 唯一例外是共享的 launch 拉起模块).
+_避免_: 后端 (指代码实体时), 业务层
+
+**服务** (Service):
+常驻的本地 FastAPI 进程, **核心库** 的运行宿主与唯一安全边界: 默认绑 127.0.0.1, 启动随机 token 护全部 API; SPA 由其托管, CLI 幂等拉起它 (在则不动作, 不在则拉起).
+_避免_: 服务器 (指远端机器时), 后端进程
+
+**执行事件流** (Execution Event Stream):
+一次请求执行的输出形态: meta/chunk/done 事件序列; SPA 经 SSE 消费, CLI 经 JSONL 消费, 同一事件模型两种编码.
+_避免_: 日志流, 消息
 
 **测试后端** (Test Backend):
 随仓库的自研 HTTP 服务, 开发夹具兼 dogfooding 对象; 覆盖产品全部能力面 (认证, SSE, 动态值校验, 边界响应), 不是产品功能.
