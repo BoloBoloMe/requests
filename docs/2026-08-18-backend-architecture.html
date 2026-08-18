@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>后端核心架构 — MILESTONE-03 Q5 图解</title>
+<style>
+  :root {
+    --paper: #f6f1e7;
+    --ink: #2e2b26;
+    --ink-soft: #57534a;
+    --accent: #a4552e;      /* 赭 */
+    --accent-blue: #3f5e78; /* 灰蓝 */
+    --accent-green: #5a6e4b;/* 苔绿 */
+    --hairline: #b7ae9d;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Spectral", "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+    line-height: 1.85;
+    font-size: 17px;
+  }
+  .page { max-width: 880px; margin: 0 auto; padding: 4rem 1.5rem 8rem; }
+  header h1 {
+    font-weight: 500;
+    font-size: 2.1rem;
+    letter-spacing: .02em;
+    margin: 0 0 .4rem;
+  }
+  header .sub {
+    color: var(--ink-soft);
+    font-size: .95rem;
+    margin-bottom: 2.5rem;
+  }
+  .rule {
+    border: none;
+    border-top: 1.5px solid var(--ink);
+    margin: 2.2rem 0;
+    position: relative;
+  }
+  .rule::after {
+    content: "";
+    position: absolute; left: 0; top: 2px;
+    width: 34%; border-top: 1px solid var(--hairline);
+  }
+  nav.toc {
+    font-size: .95rem;
+    margin: 1.5rem 0 0;
+  }
+  nav.toc ol { padding-left: 1.4em; }
+  nav.toc a { color: var(--accent-blue); text-decoration: none; border-bottom: 1px dotted var(--hairline); }
+  nav.toc a:hover, nav.toc a:focus { color: var(--accent); border-bottom-style: solid; }
+  h2 {
+    font-weight: 500;
+    font-size: 1.5rem;
+    margin: 3.5rem 0 1rem;
+  }
+  h2 .no { color: var(--accent); font-size: .85em; margin-right: .5em; }
+  h3 { font-weight: 600; font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  p { margin: .8rem 0; }
+  .goal {
+    color: var(--ink-soft);
+    font-style: italic;
+    border-left: 2px solid var(--hairline);
+    padding-left: 1rem;
+    margin: 0 0 1.4rem;
+  }
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(164, 85, 46, .06);
+    padding: .9rem 1.2rem;
+    margin: 1.4rem 0;
+  }
+  .callout.blue { border-left-color: var(--accent-blue); background: rgba(63, 94, 120, .07); }
+  .callout .tag {
+    display: inline-block;
+    font-size: .78rem;
+    letter-spacing: .12em;
+    color: var(--accent);
+    margin-bottom: .2rem;
+  }
+  .callout.blue .tag { color: var(--accent-blue); }
+  pre {
+    background: #efe9db;
+    border: 1px solid var(--hairline);
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: .82rem;
+    line-height: 1.6;
+    white-space: pre;
+    font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  figure { margin: 2rem 0; }
+  figcaption {
+    font-size: .88rem;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-top: .6rem;
+    font-style: italic;
+  }
+  svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  svg text { font-family: "Spectral", "Noto Serif SC", "Source Han Serif SC", serif; }
+  details {
+    border-top: 1px solid var(--hairline);
+    padding: .5rem 0;
+  }
+  details:last-of-type { border-bottom: 1px solid var(--hairline); }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1.05rem;
+    padding: .4rem 0;
+    list-style: none;
+  }
+  summary::before {
+    content: "▸";
+    color: var(--accent);
+    margin-right: .5em;
+    display: inline-block;
+    transition: transform .15s;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  summary:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+  .mod-grid { display: block; }
+  .kv { font-size: .92rem; }
+  .kv dt { font-weight: 600; color: var(--accent-blue); margin-top: .6rem; }
+  .kv dd { margin: 0 0 0 1.2rem; }
+  table.legend { border-collapse: collapse; font-size: .9rem; margin: 1rem auto; }
+  table.legend td { padding: .25rem .8rem; vertical-align: middle; }
+  .pill {
+    display: inline-block;
+    border: 1.5px solid var(--ink);
+    border-radius: 999px;
+    padding: 0 .7em;
+    font-size: .8rem;
+    margin-right: .4em;
+  }
+  footer { margin-top: 4rem; font-size: .85rem; color: var(--ink-soft); }
+  a:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .page { padding: 2.5rem 1rem 5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>后端核心架构</h1>
+  <div class="sub">MILESTONE-03 · Q5 模块边界图解 · 自用 API 调试与测试工具 · 2026-08-18</div>
+  <hr class="rule">
+  <nav class="toc" aria-label="目录">
+    <ol>
+      <li><a href="#big-picture">全局图景: 谁和谁说话</a></li>
+      <li><a href="#modules">六个模块: 接口与藏起来的东西</a></li>
+      <li><a href="#journey">一次发送的完整旅程</a></li>
+      <li><a href="#cli-path">CLI 路径: 幂等拉起常驻服务</a></li>
+      <li><a href="#pending">待确认事项</a></li>
+    </ol>
+  </nav>
+</header>
+
+<section id="big-picture">
+  <h2><span class="no">1</span>全局图景: 谁和谁说话</h2>
+  <p class="goal">本节目标: 一张图看清三个进程角色 (浏览器 / FastAPI 服务 / 数据仓库) 和外部世界的边界.</p>
+
+  <p>架构只有一条主轴: <strong>所有逻辑住在 FastAPI 服务进程里</strong>. SPA 是它托管的静态页面, 通过同源 HTTP + SSE 与它通信; CLI 是纯瘦客户端, 只发 HTTP. 核心库不暴露给任何外壳直接 import — 服务进程是核心库唯一的消费者.</p>
+
+  <figure role="img" aria-label="全局架构图: SPA 与 CLI 两个外壳经 HTTP 访问 FastAPI 服务, 服务内的核心库读写数据仓库并向目标 API 发请求">
+  <svg viewBox="0 0 860 620" width="860" height="620">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10" fill="none" stroke="#2e2b26" stroke-width="1.4"/>
+      </marker>
+      <marker id="arr-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10" fill="none" stroke="#3f5e78" stroke-width="1.4"/>
+      </marker>
+      <marker id="arr-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10" fill="none" stroke="#5a6e4b" stroke-width="1.4"/>
+      </marker>
+    </defs>
+
+    <!-- 手绘风辅助: 全部用略不规整的路径/圆角矩形, 细线 -->
+    <!-- SPA -->
+    <g>
+      <rect x="60" y="30" width="220" height="86" rx="14" fill="none" stroke="#2e2b26" stroke-width="1.6" transform="rotate(-0.6 170 73)"/>
+      <text x="170" y="62" text-anchor="middle" font-size="17" fill="#2e2b26">SPA (浏览器)</text>
+      <text x="170" y="86" text-anchor="middle" font-size="12" fill="#57534a">供人 · 静态页由服务托管</text>
+      <text x="170" y="104" text-anchor="middle" font-size="12" fill="#57534a">构建产物 dist/ 进仓库</text>
+    </g>
+
+    <!-- CLI -->
+    <g>
+      <rect x="580" y="30" width="220" height="86" rx="14" fill="none" stroke="#2e2b26" stroke-width="1.6" transform="rotate(0.5 690 73)"/>
+      <text x="690" y="62" text-anchor="middle" font-size="17" fill="#2e2b26">CLI</text>
+      <text x="690" y="86" text-anchor="middle" font-size="12" fill="#57534a">供 AI · 纯瘦客户端</text>
+      <text x="690" y="104" text-anchor="middle" font-size="12" fill="#57534a">不 import 核心库</text>
+    </g>
+
+    <!-- HTTP arrows shells -> service -->
+    <path d="M170,120 C165,160 175,185 185,205" fill="none" stroke="#2e2b26" stroke-width="1.5" marker-end="url(#arr)"/>
+    <text x="118" y="168" font-size="12" fill="#57534a">同源 HTTP</text>
+    <path d="M690,120 C695,160 685,185 675,205" fill="none" stroke="#2e2b26" stroke-width="1.5" marker-end="url(#arr)"/>
+    <text x="700" y="168" font-size="12" fill="#57534a">HTTP + token</text>
+
+    <!-- SSE return -->
+    <path d="M205,205 C215,180 210,150 196,124" fill="none" stroke="#3f5e78" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr-blue)"/>
+    <text x="222" y="168" font-size="12" fill="#3f5e78">SSE 流式回传</text>
+
+    <!-- FastAPI service process -->
+    <g>
+      <rect x="90" y="205" width="680" height="260" rx="18" fill="none" stroke="#a4552e" stroke-width="1.8" transform="rotate(0.3 430 335)"/>
+      <text x="122" y="236" font-size="15" fill="#a4552e" font-weight="600">FastAPI 服务进程 (127.0.0.1, 随机端口, 启动 token)</text>
+
+      <!-- API layer -->
+      <rect x="120" y="252" width="620" height="44" rx="10" fill="none" stroke="#57534a" stroke-width="1.3" stroke-dasharray="6 4"/>
+      <text x="430" y="279" text-anchor="middle" font-size="14" fill="#57534a">API 层: 资源 CRUD (REST) + 动作端点 (RPC) · 校验 Host / token</text>
+
+      <!-- core modules -->
+      <g font-size="14">
+        <rect x="132" y="322" width="100" height="52" rx="10" fill="none" stroke="#2e2b26" stroke-width="1.5"/>
+        <text x="182" y="343" text-anchor="middle" fill="#2e2b26">Runner</text>
+        <text x="182" y="362" text-anchor="middle" font-size="11" fill="#57534a">批量运行</text>
+
+        <rect x="262" y="322" width="100" height="52" rx="10" fill="none" stroke="#2e2b26" stroke-width="1.5"/>
+        <text x="312" y="343" text-anchor="middle" fill="#2e2b26">Engine</text>
+        <text x="312" y="362" text-anchor="middle" font-size="11" fill="#57534a">执行 · 事件流</text>
+
+        <rect x="392" y="322" width="100" height="52" rx="10" fill="none" stroke="#2e2b26" stroke-width="1.5"/>
+        <text x="442" y="343" text-anchor="middle" fill="#2e2b26">Resolve</text>
+        <text x="442" y="362" text-anchor="middle" font-size="11" fill="#57534a">变量 · 继承</text>
+
+        <rect x="522" y="322" width="100" height="52" rx="10" fill="none" stroke="#2e2b26" stroke-width="1.5"/>
+        <text x="572" y="343" text-anchor="middle" fill="#2e2b26">Store</text>
+        <text x="572" y="362" text-anchor="middle" font-size="11" fill="#57534a">文件读写</text>
+
+        <rect x="652" y="322" width="76" height="52" rx="10" fill="none" stroke="#2e2b26" stroke-width="1.5"/>
+        <text x="690" y="343" text-anchor="middle" fill="#2e2b26">Assert</text>
+        <text x="690" y="362" text-anchor="middle" font-size="11" fill="#57534a">断言校验</text>
+
+        <rect x="652" y="396" width="76" height="44" rx="10" fill="none" stroke="#5a6e4b" stroke-width="1.5"/>
+        <text x="690" y="423" text-anchor="middle" fill="#5a6e4b" font-size="13">Sync (git)</text>
+      </g>
+
+      <!-- intra-process deps -->
+      <path d="M232,348 L258,348" stroke="#2e2b26" stroke-width="1.4" marker-end="url(#arr)"/>
+      <path d="M362,348 L388,348" stroke="#2e2b26" stroke-width="1.4" marker-end="url(#arr)"/>
+      <path d="M492,348 L518,348" stroke="#2e2b26" stroke-width="1.4" marker-end="url(#arr)"/>
+      <path d="M360,332 C420,312 560,312 648,330" fill="none" stroke="#2e2b26" stroke-width="1.3" marker-end="url(#arr)"/>
+      <text x="505" y="312" font-size="11" fill="#57534a">响应回来后校验</text>
+      <path d="M330,374 C400,402 480,402 538,378" fill="none" stroke="#a4552e" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+      <text x="382" y="404" font-size="11" fill="#a4552e">写历史 (发送即记录)</text>
+      <text x="140" y="425" font-size="11" fill="#57534a">Runner ──► Engine ──► Resolve ──► Store · 依赖一律向右, 无环</text>
+    </g>
+
+    <!-- data repo -->
+    <g>
+      <rect x="90" y="505" width="330" height="90" rx="14" fill="none" stroke="#2e2b26" stroke-width="1.6" transform="rotate(-0.4 255 550)"/>
+      <text x="255" y="533" text-anchor="middle" font-size="15" fill="#2e2b26">数据仓库 (本地文件, git 管理)</text>
+      <text x="255" y="555" text-anchor="middle" font-size="11.5" fill="#57534a">collections/ · environments/ · files/</text>
+      <text x="255" y="573" text-anchor="middle" font-size="11.5" fill="#57534a">.local/ (state, history, service.json, token)</text>
+    </g>
+
+    <!-- target api -->
+    <g>
+      <rect x="580" y="505" width="190" height="90" rx="14" fill="none" stroke="#2e2b26" stroke-width="1.6" transform="rotate(0.6 675 550)"/>
+      <text x="675" y="545" text-anchor="middle" font-size="15" fill="#2e2b26">目标 API</text>
+      <text x="675" y="567" text-anchor="middle" font-size="11.5" fill="#57534a">被调试的任意 HTTP 服务</text>
+    </g>
+
+    <!-- service -> repo -->
+    <path d="M255,467 C252,482 252,492 253,502" fill="none" stroke="#5a6e4b" stroke-width="1.5" marker-end="url(#arr-green)"/>
+    <text x="150" y="490" font-size="12" fill="#5a6e4b">Store / Sync 读写</text>
+
+    <!-- service -> target -->
+    <path d="M675,467 C678,482 678,492 677,502" fill="none" stroke="#2e2b26" stroke-width="1.5" marker-end="url(#arr)"/>
+    <text x="688" y="490" font-size="12" fill="#57534a">Engine · httpx</text>
+  </svg>
+  <figcaption>图 1 — 一个服务进程, 两个瘦外壳, 两个外部世界 (数据仓库与目标 API)</figcaption>
+  </figure>
+
+  <table class="legend" aria-label="图例">
+    <tr>
+      <td><svg width="54" height="10"><path d="M2,5 L48,5" stroke="#2e2b26" stroke-width="1.5" marker-end="url(#arr)"/></svg></td>
+      <td>HTTP / 进程内调用</td>
+      <td><svg width="54" height="10"><path d="M2,5 L48,5" stroke="#3f5e78" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr-blue)"/></svg></td>
+      <td>SSE 流式回传</td>
+      <td><svg width="54" height="10"><path d="M2,5 L48,5" stroke="#a4552e" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr)"/></svg></td>
+      <td>副作用 (写历史)</td>
+    </tr>
+  </table>
+
+  <div class="callout">
+    <span class="tag">关键取舍</span>
+    <p>CLI 不 import 核心库 (Q1=b). 核心库因此只有一个消费者 — FastAPI 服务; 模块间全部是进程内函数调用, 不存在跨进程 relay 协议, 也没有 "两套执行路径分叉" 的风险.</p>
+  </div>
+</section>
+
+<section id="modules">
+  <h2><span class="no">2</span>六个模块: 接口与藏起来的东西</h2>
+  <p class="goal">本节目标: 每个模块按 deep module 原则给出 interface (调用者需要知道的一切) 与 implementation (被隐藏的复杂度). 点击展开.</p>
+
+  <div class="mod-grid">
+  <details>
+    <summary>Store — 数据仓库的唯一读写入口</summary>
+    <dl class="kv">
+      <dt>Interface</dt>
+      <dd>领域对象进, 领域对象出: 读集合树 / 读请求条目 / 写请求条目 / 读环境(含 secrets 合并) / 读写 .local 状态 / 追加历史.</dd>
+      <dt>Implementation 藏什么</dt>
+      <dd>YAML 子集解析 (禁锚点, kv 一律字符串), <code>seq</code> 排序与文件名 tiebreak, 目录布局, .gitignore 规则写入, 历史文件的时间戳命名.</dd>
+      <dt>被谁用</dt>
+      <dd>Resolve (读定义), Engine (写历史), Sync (拿路径做 git 操作).</dd>
+    </dl>
+  </details>
+
+  <details>
+    <summary>Resolve — 请求条目 + 环境 → 可执行请求</summary>
+    <dl class="kv">
+      <dt>Interface</dt>
+      <dd>输入: 请求条目 + 激活环境名. 输出: 变量已全部代入, 认证与头已合并完毕的可执行请求.</dd>
+      <dt>Implementation 藏什么</dt>
+      <dd>变量优先级 (集合 &lt; 环境 &lt; secrets), 集合级默认继承 (headers 按名合并, auth 整体覆盖), 动态变量 <code>{{$now}}</code> / <code>{{$uuid}}</code> 现场求值.</dd>
+      <dt>被谁用</dt>
+      <dd>Engine.</dd>
+    </dl>
+  </details>
+
+  <details>
+    <summary>Engine — 可执行请求 → 事件流</summary>
+    <dl class="kv">
+      <dt>Interface</dt>
+      <dd>输入: 可执行请求. 输出: 事件流 <code>meta → chunk* → done</code>. 支持取消.</dd>
+      <dt>Implementation 藏什么</dt>
+      <dd>httpx, 五种认证构造, multipart 文件引用解析 (相对/绝对路径), SSE 接收, 超时与取消. 唯一副作用: 发送即写历史 (委托 Store).</dd>
+      <dt>被谁用</dt>
+      <dd>Runner, API 层的 <code>POST /execute</code>.</dd>
+    </dl>
+  </details>
+
+  <details>
+    <summary>Assert — 响应 + 断言定义 → 结果列表</summary>
+    <dl class="kv">
+      <dt>Interface</dt>
+      <dd>纯函数: 输入响应与断言定义, 输出逐条通过/失败及实际值.</dd>
+      <dt>Implementation 藏什么</dt>
+      <dd>jmespath 取值, 比较符求值, jsonschema 校验. DSL 具体形状由 MILESTONE-06 原型决定, 这里只定模块位置.</dd>
+      <dt>被谁用</dt>
+      <dd>Engine (执行后校验), Runner.</dd>
+    </dl>
+  </details>
+
+  <details>
+    <summary>Runner — 集合 → 批量事件流 + JUnit 报告</summary>
+    <dl class="kv">
+      <dt>Interface</dt>
+      <dd>输入: 集合路径与筛选条件. 输出: 聚合事件流; CI 场景产 JUnit XML.</dd>
+      <dt>Implementation 藏什么</dt>
+      <dd>按 seq 排序遍历, 逐条委托 Engine, 失败汇总; pytest 作为 CI 宿主 (subprocess + JUnit, 方向 C 结论).</dd>
+      <dt>被谁用</dt>
+      <dd>API 层的 <code>POST /collections/{x}/run</code>.</dd>
+    </dl>
+  </details>
+
+  <details>
+    <summary>Sync — git 绑定 / 提交 / 推拉封装</summary>
+    <dl class="kv">
+      <dt>Interface</dt>
+      <dd>绑定远端 / 查看状态 / 提交并推送 / 拉取. SPA 的 git 入口全部经此.</dd>
+      <dt>Implementation 藏什么</dt>
+      <dd>git 子进程调用, .gitignore 自动写入 (secrets / .local), 冲突报错透传.</dd>
+      <dt>被谁用</dt>
+      <dd>API 层的 <code>/git/*</code> 端点. CLI 不接管 git (既定约束).</dd>
+    </dl>
+  </details>
+  </div>
+</section>
+
+<section id="journey">
+  <h2><span class="no">3</span>一次发送的完整旅程</h2>
+  <p class="goal">本节目标: 用一条具体请求把图 1 的箭头全部走一遍, 钉死抽象.</p>
+
+  <p>请求条目 <code>collections/billing/create-order.yaml</code>:</p>
+  <pre>version: 1
+name: 创建订单
+method: POST
+url: "{{host}}/api/orders"
+headers:
+  - { key: "X-Request-Id", value: "{{$uuid}}" }
+body:
+  type: json
+  value: '{ "item": "book", "ts": "{{$now}}" }'
+assert:
+  - { jmespath: "id", op: "exists" }</pre>
+
+  <ol>
+    <li>SPA 点 "发送" → <code>POST /execute</code> (带 token), 请求体指向该条目.</li>
+    <li>API 层校验 Host 头与 token, 把参数交给核心库.</li>
+    <li><strong>Store</strong> 读出条目 + <code>_collection.yaml</code> + 激活环境 (<code>.local/state.yaml</code> 指向 <code>dev</code>) + <code>dev.secrets.yaml</code>.</li>
+    <li><strong>Resolve</strong> 代入变量: <code>{{host}}</code> ← 环境覆盖集合; <code>{{$uuid}}</code> / <code>{{$now}}</code> 现场求值; 集合级默认的 <code>Authorization</code> 头并入.</li>
+    <li><strong>Engine</strong> 经 httpx 发出请求, 同时让 <strong>Store</strong> 开始记历史.</li>
+    <li>响应若是 SSE 流: 每个事件包成 <code>chunk</code> 事件, 经 FastAPI 的 SSE 通道逐段推给 SPA 渲染.</li>
+    <li>连接关闭后: <strong>Assert</strong> 跑断言; 聚合文本体落盘到 <code>.local/history/billing/create-order/&lt;时间戳&gt;.yaml</code>; <code>done</code> 事件收尾.</li>
+  </ol>
+
+  <div class="callout blue">
+    <span class="tag">SPA 看到的事件流 (SSE data 行)</span>
+    <pre>{"type":"meta","status":200,"headers":{...},"elapsed_ms":0}
+{"type":"chunk","text":"{\"id\":\"ord_1\"}"}
+{"type":"done","elapsed_ms":87,"assert":[{"jmespath":"id","op":"exists","pass":true}]}</pre>
+  </div>
+
+  <div class="callout">
+    <span class="tag">边界情形</span>
+    <p>响应非文本或超大 → 历史只落元信息 (content-type/大小). SSE 未关闭不落盘. multipart 请求历史只落文件引用路径+大小, 不内联文件内容 (MILESTONE-02 D011).</p>
+  </div>
+</section>
+
+<section id="cli-path">
+  <h2><span class="no">4</span>CLI 路径: 幂等拉起常驻服务</h2>
+  <p class="goal">本节目标: 说清 AI 手里的 CLI 如何找到或拉起服务, 拿到凭证, 以及生命周期归谁管.</p>
+
+  <ol>
+    <li>AI 执行 <code>api-client collections run billing</code>.</li>
+    <li>CLI 读数据仓库 <code>.local/service.json</code>:
+      <pre>{ "port": 58123, "token": "…", "pid": 40217 }</pre>
+    </li>
+    <li>读得到且探活成功 → 直接发请求, <strong>零启动成本</strong>; 读不到或连不上 → 拉起服务 (<code>uv run</code>), 等服务写出 <code>service.json</code> 后重读再连. 整个动作幂等: 服务已在跑就什么都不做.</li>
+    <li>服务常驻; 关闭是显式动作 (CLI <code>stop</code> 子命令或 SPA 入口), 不做闲置自动回收.</li>
+  </ol>
+
+  <div class="callout blue">
+    <span class="tag">token 的三条通道</span>
+    <p>SPA: 同源托管页直下注入, 无需存储; CLI: 读 <code>.local/service.json</code>; 浏览器里的恶意网页: 三条路都拿不到 — 这是 Q3 安全组合的关键一环 (Host 白名单防 rebinding, token 覆盖读/写/WS 三面).</p>
+  </div>
+</section>
+
+<section id="pending">
+  <h2><span class="no">5</span>待确认事项</h2>
+  <p class="goal">本节目标: 本页只是 Q5 建议方案的可视化, 决策仍在 chat 中确认.</p>
+  <ul>
+    <li><span class="pill">Q5</span>六模块划分与依赖方向 — <strong>待你确认或改动</strong></li>
+    <li><span class="pill">Q6</span>API 形态: 建议混合 (资源 CRUD 走 REST, 动作走 RPC) — 待确认</li>
+    <li><span class="pill">Q7</span>服务拉起/发现/生命周期四项细节 — 待确认</li>
+    <li><span class="pill">Q8</span>测试策略四条 — 待确认</li>
+  </ul>
+  <p>已定: Q1 CLI 纯瘦客户端 (幂等拉起常驻服务) · Q2 dist 进仓库 · Q3 安全组合五项 · Q4 服务内嵌执行 + SSE 回传 + CLI JSONL.</p>
+</section>
+
+<footer>
+  <hr class="rule">
+  MILESTONE-03 后端核心架构 · 本页为盘问辅助材料, 决策账本以 DECISIONS.md 为准.
+</footer>
+
+</div>
+<script>
+window.__PRESENTATION_STATE__ = {
+  version: 1,
+  values: {
+    openSections: []
+  }
+};
+(function () {
+  var details = document.querySelectorAll("details");
+  function sync() {
+    var open = [];
+    details.forEach(function (d, i) { if (d.open) open.push(i); });
+    window.__PRESENTATION_STATE__.values.openSections = open;
+  }
+  details.forEach(function (d) { d.addEventListener("toggle", sync); });
+})();
+</script>
+</body>
+</html>
