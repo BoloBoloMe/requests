@@ -24,9 +24,11 @@
 - [MILESTONE-02](MILESTONE-02.md) — 数据存储与集合格式: 每请求一 YAML 文件 (version 字段, YAML 子集), 数据仓库布局 (collections/environments/files/.local), frontmatter seq 排序, 集合一级默认继承, 环境进 git + secrets gitignored, 文本传输历史 append 落盘. 产物: [DECISIONS.md](../milestone-02/DECISIONS.md), [ADR 0003](../../../adr/0003-yaml-per-request-format.md)
 - [MILESTONE-03](MILESTONE-03.md) — 后端核心架构: CLI 瘦客户端 + 幂等拉起常驻服务 (launch 模块共享), 执行引擎内嵌服务进程 (async httpx, 无独立代理), SSE/JSONL 单一事件流, 六模块边界 (Store/Resolve/Engine/Assert/Runner/Sync), REST+RPC 混合 API, 本地安全五件套 (绑回环/Host 白名单/禁 CORS/启动 token/CSP), dist 入库, v1 仅 POSIX. 产物: [DECISIONS.md](../milestone-03/DECISIONS.md), [RESEARCH-local-security.md](../milestone-03/RESEARCH-local-security.md), ADR [0004](../../../adr/0004-thin-cli-service-convergence.md)/[0005](../../../adr/0005-commit-spa-dist.md), [领域语言](../../../language/UBIQUITOUS_LANGUAGE.md)
 
+- [MILESTONE-03](MILESTONE-03.md) — 后端核心架构: CLI 瘦客户端 + 幂等拉起常驻服务 (launch 模块共享), 执行引擎内嵌服务进程 (async httpx, 无独立代理), SSE/JSONL 单一事件流, 六模块边界 (Store/Resolve/Engine/Assert/Runner/Sync), REST+RPC 混合 API, 本地安全五件套 (绑回环/Host 白名单/禁 CORS/启动 token/CSP), dist 入库, v1 仅 POSIX. 产物: [DECISIONS.md](../milestone-03/DECISIONS.md), [RESEARCH-local-security.md](../milestone-03/RESEARCH-local-security.md), ADR [0004](../../../adr/0004-thin-cli-service-convergence.md)/[0005](../../../adr/0005-commit-spa-dist.md), [领域语言](../../../language/UBIQUITOUS_LANGUAGE.md)
+- [MILESTONE-04](MILESTONE-04.md) — AI CLI 外壳原型: 三轮 LLM dogfood 收敛; 命令面 = 动作动词 (send/run) + 资源名词组 (collection/item/env/history/service) + 元命令 (schema/guide); 流式 NDJSON/非流式 JSON/pretty; send/run 同构事件流 (meta/chunk/done/summary); 退出码 0-4 + 细分错误码带 candidates 纠错; 双通道可发现性; 未解析变量硬失败. 产物: [DECISIONS.md](../milestone-04/DECISIONS.md), [原型归档](../prototypes/cli-shell/)
+
 ## 前沿
 
-- [MILESTONE-04](MILESTONE-04.md) — `prototype` — AI CLI 外壳原型: 命令面/结构化输出/退出码/可发现性. 输入约束: MILESTONE-03 账本 (瘦客户端/幂等拉起/SSE+JSONL 事件流)
 - [MILESTONE-12](MILESTONE-12.md) — `task` — 自研测试后端: 开发夹具, 覆盖 v1 全能力面 (五认证/SSE/动态值/边界)
 - [MILESTONE-06](MILESTONE-06.md) — `prototype` — 断言 DSL 原型: jmespath + 比较符 + jsonschema
 - [MILESTONE-05](MILESTONE-05.md) — `prototype` — SPA 界面原型: 请求构建器/集合树/响应查看器/批量运行面板/git 入口
@@ -34,7 +36,7 @@
 ## 未决迷雾
 
 - 实时协议二期形状 — WS/SSE/gRPC 完整支持长什么样; 并入 MILESTONE-07 考察点: 后端代理转发方案 (取消/重连/缓冲语义), 前端流式渲染与转发端口, 大流渲染性能. 回访触发条件 (D002): 首次需调试 SSE 端点且 curl/现有能力不够用达两次以上 → 立项.
-- AI 高阶能力 — AI 生成集合/断言, OpenAPI 自动转集合等; 粒度太粗, 待 MILESTONE-04 关闭后回访. OpenAPI 转集合回访优先级已降低 (ADR 0002: 集合预期从业务现场手建).
+- AI 高阶能力 — AI 生成集合/断言, OpenAPI 自动转集合等; 粒度太粗, MILESTONE-04 已关闭 (CLI 命令面已定) 但仍不足立项, 回访触发改为 MILESTONE-10 (CLI 实现) 关闭后. OpenAPI 转集合回访优先级已降低 (ADR 0002: 集合预期从业务现场手建).
 
 ## 范围外
 
@@ -46,7 +48,7 @@
 ## 阻塞关系
 
 ```text
-03 ──► 04
+03 ──► 04 (均已关闭)
 05 (已解锁, 不阻塞他人)
 06 (独立, 不阻塞他人)
 12 (独立, 不阻塞他人; 为 06/08/09/10 提供测试靶子)
