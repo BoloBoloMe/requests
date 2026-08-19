@@ -2,10 +2,12 @@
 
 from fastapi import FastAPI, Request
 
+from testbed.auth import router as auth_router
 from testbed.things import router as things_router
 
 app = FastAPI()
 app.include_router(things_router)
+app.include_router(auth_router)
 
 
 @app.get("/echo")
