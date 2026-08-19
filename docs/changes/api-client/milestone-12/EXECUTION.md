@@ -12,7 +12,7 @@
 
 ## ISSUE 列表
 
-- [ ] ISSUE-01: 项目骨架 + echo 端点 — uv 骨架/pyproject/测试底座; `GET|POST /echo` 回显 method/path/query/headers/body
+- [x] 已实现 ISSUE-01: 项目骨架 + echo 端点 — uv 骨架/pyproject/测试底座; `GET|POST /echo` 回显 method/path/query/headers/body
 - [ ] ISSUE-02: CRUD `/things` — 内存集合 POST/GET/PUT/DELETE, 404 语义
 - [ ] ISSUE-03: 认证端点 basic/bearer/apikey — `/auth/{basic,bearer}` 与 `/auth/apikey` (header + query 两种携带); 错误凭证 401, `WWW-Authenticate` 头正确
 - [ ] ISSUE-04: digest 认证端点 `/auth/digest` — 完整质询/响应往返, 错误口令 401
