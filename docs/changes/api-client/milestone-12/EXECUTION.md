@@ -14,8 +14,8 @@
 
 - [x] 已实现 ISSUE-01: 项目骨架 + echo 端点 — uv 骨架/pyproject/测试底座; `GET|POST /echo` 回显 method/path/query/headers/body
 - [x] 已实现 ISSUE-02: CRUD `/things` — 内存集合 POST/GET/PUT/DELETE, 404 语义
-- [ ] ISSUE-03: 认证端点 basic/bearer/apikey — `/auth/{basic,bearer}` 与 `/auth/apikey` (header + query 两种携带); 错误凭证 401, `WWW-Authenticate` 头正确
-- [ ] ISSUE-04: digest 认证端点 `/auth/digest` — 完整质询/响应往返, 错误口令 401
+- [x] 已实现 ISSUE-03: 认证端点 basic/bearer/apikey — `/auth/{basic,bearer}` 与 `/auth/apikey` (header + query 两种携带); 错误凭证 401, `WWW-Authenticate` 头正确
+- [x] 已实现 ISSUE-04: digest 认证端点 `/auth/digest` — 完整质询/响应往返, 错误口令 401
 - [ ] ISSUE-05: SSE 端点 `/sse` — `text/event-stream`, N 个带序号事件 + 间隔, 可控 event/data 形状
 - [ ] ISSUE-06: 动态值校验端点 — `/dynamic/now` 校验 ISO 时间戳且在服务器当前 ±60s 内; `/dynamic/uuid` 校验 UUIDv4 格式; 非法输入 422 + 原因
 - [ ] ISSUE-07: 边界端点 — `/status/{code}` 任意错误响应; `/delay/{seconds}` 延迟 (超时靶子); `/large?bytes=` 大响应体

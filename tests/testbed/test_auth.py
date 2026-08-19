@@ -1,7 +1,10 @@
-"""ISSUE-03: 认证端点 basic/bearer/apikey 切片测试."""
+"""ISSUE-03 / ISSUE-04: 认证端点 basic/bearer/apikey/digest 切片测试."""
 
 import base64
+import hashlib
+import re
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -98,3 +101,71 @@ class TestApiKeyAuth:
         response = client.get(url, headers=headers)
         assert response.status_code == 401
         assert response.json() == {"error": "unauthorized"}
+
+
+class TestDigestAuth:
+    def _build_digest_auth_header(
+        self,
+        *,
+        nonce: str,
+        uri: str,
+        username: str = "demo",
+        password: str = "digest-pass",
+        method: str = "GET",
+        nc: str = "00000001",
+        cnonce: str = "abc123",
+    ) -> str:
+        realm = "testbed"
+        qop = "auth"
+        ha1 = hashlib.md5(f"{username}:{realm}:{password}".encode()).hexdigest()
+        ha2 = hashlib.md5(f"{method}:{uri}".encode()).hexdigest()
+        response = hashlib.md5(
+            f"{ha1}:{nonce}:{nc}:{cnonce}:{qop}:{ha2}".encode()
+        ).hexdigest()
+        return (
+            f'Digest username="{username}", realm="{realm}", nonce="{nonce}", '
+            f'uri="{uri}", response="{response}", qop="{qop}", nc={nc}, '
+            f'cnonce="{cnonce}"'
+        )
+
+    def test_digest_unauthorized_returns_challenge(self):
+        response = client.get("/auth/digest")
+        assert response.status_code == 401
+        assert response.json() == {"error": "unauthorized"}
+        www_auth = response.headers.get("WWW-Authenticate", "")
+        assert www_auth.startswith("Digest ")
+        assert "realm=\"" in www_auth
+        assert "nonce=\"" in www_auth
+        assert "qop=\"auth\"" in www_auth
+
+    def test_digest_correct_credentials_returns_200(self):
+        response = client.get(
+            "/auth/digest",
+            auth=httpx.DigestAuth("demo", "digest-pass"),
+        )
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+
+    def test_digest_wrong_password_returns_401(self):
+        response = client.get(
+            "/auth/digest",
+            auth=httpx.DigestAuth("demo", "wrong-pass"),
+        )
+        assert response.status_code == 401
+        assert response.json() == {"error": "unauthorized"}
+
+    def test_digest_mismatched_uri_returns_401(self):
+        challenge = client.get("/auth/digest")
+        assert challenge.status_code == 401
+        www_auth = challenge.headers["WWW-Authenticate"]
+        nonce_match = re.search(r'nonce="([^"]+)"', www_auth)
+        assert nonce_match is not None
+        nonce = nonce_match.group(1)
+
+        # 构造合法字段但 uri 与真实请求路径不符的 Authorization 头.
+        auth_header = self._build_digest_auth_header(nonce=nonce, uri="/auth/digest")
+        response = client.get(
+            "/auth/digest?foo=bar",
+            headers={"Authorization": auth_header},
+        )
+        assert response.status_code == 401
