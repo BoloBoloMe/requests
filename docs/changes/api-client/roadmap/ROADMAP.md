@@ -26,10 +26,10 @@
 
 - [MILESTONE-03](MILESTONE-03.md) — 后端核心架构: CLI 瘦客户端 + 幂等拉起常驻服务 (launch 模块共享), 执行引擎内嵌服务进程 (async httpx, 无独立代理), SSE/JSONL 单一事件流, 六模块边界 (Store/Resolve/Engine/Assert/Runner/Sync), REST+RPC 混合 API, 本地安全五件套 (绑回环/Host 白名单/禁 CORS/启动 token/CSP), dist 入库, v1 仅 POSIX. 产物: [DECISIONS.md](../milestone-03/DECISIONS.md), [RESEARCH-local-security.md](../milestone-03/RESEARCH-local-security.md), ADR [0004](../../../adr/0004-thin-cli-service-convergence.md)/[0005](../../../adr/0005-commit-spa-dist.md), [领域语言](../../../language/UBIQUITOUS_LANGUAGE.md)
 - [MILESTONE-04](MILESTONE-04.md) — AI CLI 外壳原型: 三轮 LLM dogfood 收敛; 命令面 = 动作动词 (send/run) + 资源名词组 (collection/item/env/history/service) + 元命令 (schema/guide); 流式 NDJSON/非流式 JSON/pretty; send/run 同构事件流 (meta/chunk/done/summary); 退出码 0-4 + 细分错误码带 candidates 纠错; 双通道可发现性; 未解析变量硬失败. 产物: [DECISIONS.md](../milestone-04/DECISIONS.md), [原型归档](../prototypes/cli-shell/)
+- [MILESTONE-12](MILESTONE-12.md) — 自研测试后端 `testbed`: FastAPI+uvicorn 同栈, 8 ISSUE 全绿 (62 测试); echo/things CRUD/auth×4 (含手搓 RFC 7616 digest)/SSE/dynamic 校验/边界端点; `uv run testbed` 可起. 产物: [EXECUTION.md](../milestone-12/EXECUTION.md), `src/testbed/`, `tests/testbed/`, [README](../../../src/testbed/README.md)
 
 ## 前沿
 
-- [MILESTONE-12](MILESTONE-12.md) — `task` — 自研测试后端: 开发夹具, 覆盖 v1 全能力面 (五认证/SSE/动态值/边界)
 - [MILESTONE-06](MILESTONE-06.md) — `prototype` — 断言 DSL 原型: jmespath + 比较符 + jsonschema
 - [MILESTONE-05](MILESTONE-05.md) — `prototype` — SPA 界面原型: 请求构建器/集合树/响应查看器/批量运行面板/git 入口
 
@@ -51,7 +51,7 @@
 03 ──► 04 (均已关闭)
 05 (已解锁, 不阻塞他人)
 06 (独立, 不阻塞他人)
-12 (独立, 不阻塞他人; 为 06/08/09/10 提供测试靶子)
+12 (已关闭; 为 06/08/09/10 提供测试靶子)
 03, 06 ──► 08
 05, 08 ──► 09
 04, 08 ──► 10
