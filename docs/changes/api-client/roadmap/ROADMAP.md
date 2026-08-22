@@ -23,15 +23,15 @@
 - [MILESTONE-07](MILESTONE-07.md) — 实时协议流式转发调研: 激活条件未满足 (MILESTONE-01 砍 WS/gRPC, SSE 仅保留响应查看器流式渲染), 考察点并入未决迷雾 "实时协议二期形状"
 - [MILESTONE-02](MILESTONE-02.md) — 数据存储与集合格式: 每请求一 YAML 文件 (version 字段, YAML 子集), 数据仓库布局 (collections/environments/files/.local), frontmatter seq 排序, 集合一级默认继承, 环境进 git + secrets gitignored, 文本传输历史 append 落盘. 产物: [DECISIONS.md](../milestone-02/DECISIONS.md), [ADR 0003](../../../adr/0003-yaml-per-request-format.md)
 - [MILESTONE-03](MILESTONE-03.md) — 后端核心架构: CLI 瘦客户端 + 幂等拉起常驻服务 (launch 模块共享), 执行引擎内嵌服务进程 (async httpx, 无独立代理), SSE/JSONL 单一事件流, 六模块边界 (Store/Resolve/Engine/Assert/Runner/Sync), REST+RPC 混合 API, 本地安全五件套 (绑回环/Host 白名单/禁 CORS/启动 token/CSP), dist 入库, v1 仅 POSIX. 产物: [DECISIONS.md](../milestone-03/DECISIONS.md), [RESEARCH-local-security.md](../milestone-03/RESEARCH-local-security.md), ADR [0004](../../../adr/0004-thin-cli-service-convergence.md)/[0005](../../../adr/0005-commit-spa-dist.md), [领域语言](../../../language/UBIQUITOUS_LANGUAGE.md)
-
-- [MILESTONE-03](MILESTONE-03.md) — 后端核心架构: CLI 瘦客户端 + 幂等拉起常驻服务 (launch 模块共享), 执行引擎内嵌服务进程 (async httpx, 无独立代理), SSE/JSONL 单一事件流, 六模块边界 (Store/Resolve/Engine/Assert/Runner/Sync), REST+RPC 混合 API, 本地安全五件套 (绑回环/Host 白名单/禁 CORS/启动 token/CSP), dist 入库, v1 仅 POSIX. 产物: [DECISIONS.md](../milestone-03/DECISIONS.md), [RESEARCH-local-security.md](../milestone-03/RESEARCH-local-security.md), ADR [0004](../../../adr/0004-thin-cli-service-convergence.md)/[0005](../../../adr/0005-commit-spa-dist.md), [领域语言](../../../language/UBIQUITOUS_LANGUAGE.md)
 - [MILESTONE-04](MILESTONE-04.md) — AI CLI 外壳原型: 三轮 LLM dogfood 收敛; 命令面 = 动作动词 (send/run) + 资源名词组 (collection/item/env/history/service) + 元命令 (schema/guide); 流式 NDJSON/非流式 JSON/pretty; send/run 同构事件流 (meta/chunk/done/summary); 退出码 0-4 + 细分错误码带 candidates 纠错; 双通道可发现性; 未解析变量硬失败. 产物: [DECISIONS.md](../milestone-04/DECISIONS.md), [原型归档](../prototypes/cli-shell/)
 - [MILESTONE-12](MILESTONE-12.md) — 自研测试后端 `testbed`: FastAPI+uvicorn 同栈, 8 ISSUE 全绿 (62 测试); echo/things CRUD/auth×4 (含手搓 RFC 7616 digest)/SSE/dynamic 校验/边界端点; `uv run testbed` 可起. 产物: [EXECUTION.md](../milestone-12/EXECUTION.md), `src/testbed/`, `tests/testbed/`, [README](../../../src/testbed/README.md)
 
+- [MILESTONE-06](MILESTONE-06.md) — 断言 DSL 原型: 双形态拍板 — 结构化 DSL (target+op+expect / jsonschema) 为主 + Python 逃生舱 (exec 注入 response, 无沙箱); YAML 序列化, python 代码用块标量; 非 JSON 体降级裸文本 contains/matches; 已知缺口 (数组长度/浮点容差) 全由逃生舱覆盖. 产物: [DECISIONS.md](../milestone-06/DECISIONS.md), ADR [0006](../../../adr/0006-assertion-dsl-with-python-escape-hatch.md), [原型归档](../prototypes/assertion-dsl/)
+
 ## 前沿
 
-- [MILESTONE-06](MILESTONE-06.md) — `prototype` — 断言 DSL 原型: jmespath + 比较符 + jsonschema
 - [MILESTONE-05](MILESTONE-05.md) — `prototype` — SPA 界面原型: 请求构建器/集合树/响应查看器/批量运行面板/git 入口
+- [MILESTONE-08](MILESTONE-08.md) — `task` — 后端核心实现 (03, 06 均已关闭, 解锁)
 
 ## 未决迷雾
 
@@ -50,9 +50,9 @@
 ```text
 03 ──► 04 (均已关闭)
 05 (已解锁, 不阻塞他人)
-06 (独立, 不阻塞他人)
-12 (已关闭; 为 06/08/09/10 提供测试靶子)
-03, 06 ──► 08
+06 (已关闭)
+12 (已关闭; 为 08/09/10 提供测试靶子)
+03, 06 ──► 08 (阻塞者均已关闭, 08 已解锁)
 05, 08 ──► 09
 04, 08 ──► 10
 09, 10 ──► 11 ──► 目的地
