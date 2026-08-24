@@ -22,9 +22,10 @@ build-backend = "hatchling.build"
 
 [project.scripts]
 testbed = "testbed.__main__:main"
+apic = "api_client.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/testbed"]
+packages = ["src/testbed", "src/api_client"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/testbed"]
+testpaths = ["tests/testbed", "tests/api_client"]
