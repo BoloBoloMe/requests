@@ -24,11 +24,11 @@
 
 浅色低饱和暖灰底 (#f5f4f1 系), 单色深色主按钮, 状态语义色 (绿/红/黄) 仅限状态表达; 等宽字体用于 URL/JSON/日志; 无边框输入悬停显框.
 
-## 待决 (移交 MILESTONE-08/09)
+## 决策 5: 日志与历史落盘不脱敏 secrets
 
-- **secrets 脱敏策略**: 日志与历史落盘中的 Authorization 等是否脱敏. 原型演示为脱敏 (`Bearer ••••••`); 用户未拍板, 倾向默认脱敏. 影响 Engine 的历史落盘 (MILESTONE-08) 与日志展示 (MILESTONE-09).
+完整收发转录与 `.local/history/` 落盘均保留原文 (含 Authorization 等), 用户拍板不脱敏 — 自用场景, 事后排查价值大于泄露风险; 历史本就在 gitignored 的 `.local/`, 真秘密的边界靠 secrets 文件不进 git 守住, 不靠脱敏.
 
 ## 产物
 
-- 原型: `../prototypes/spa-ui/2026-08-23-spa-ui-variants.html` (单文件三变体, `?variant=a|b|c`; B 为高保真可交互参考, A/C 为落选线框). 子形态 C, 合并主干前由人清理.
+- 原型: `../prototypes/spa-ui/2026-08-23-spa-ui-variants.html` (单文件三变体, `?variant=a|b|c`; B 为高保真可交互参考, A/C 为落选线框; 原型中日志脱敏演示已随决策 5 失效, 以决策为准). 子形态 C, 合并主干前由人清理.
 - 实现指针: MILESTONE-09 (SPA 实现) 以此为准.

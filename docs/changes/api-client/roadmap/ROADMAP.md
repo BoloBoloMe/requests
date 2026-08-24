@@ -28,7 +28,7 @@
 
 - [MILESTONE-06](MILESTONE-06.md) — 断言 DSL 原型: 双形态拍板 — 结构化 DSL (target+op+expect / jsonschema) 为主 + Python 逃生舱 (exec 注入 response, 无沙箱); YAML 序列化, python 代码用块标量; 非 JSON 体降级裸文本 contains/matches; 已知缺口 (数组长度/浮点容差) 全由逃生舱覆盖. 产物: [DECISIONS.md](../milestone-06/DECISIONS.md), ADR [0006](../../../adr/0006-assertion-dsl-with-python-escape-hatch.md), [原型归档](../prototypes/assertion-dsl/)
 
-- [MILESTONE-05](MILESTONE-05.md) — SPA 界面原型: 双栏纵向流胜出 (左树+git 行 | 上请求下响应); git 极简为单「同步」按钮; 响应查看器三 tab 含完整收发日志; runner 内联树徽标; 浅色低饱和基调. 产物: [DECISIONS.md](../milestone-05/DECISIONS.md), [原型归档](../prototypes/spa-ui/2026-08-23-spa-ui-variants.html). 待决移交: 日志/历史的 secrets 脱敏策略
+- [MILESTONE-05](MILESTONE-05.md) — SPA 界面原型: 双栏纵向流胜出 (左树+git 行 | 上请求下响应); git 极简为单「同步」按钮; 响应查看器三 tab 含完整收发日志; 日志/历史落盘不脱敏 secrets; runner 内联树徽标; 浅色低饱和基调. 产物: [DECISIONS.md](../milestone-05/DECISIONS.md), [原型归档](../prototypes/spa-ui/2026-08-23-spa-ui-variants.html)
 
 ## 前沿
 
