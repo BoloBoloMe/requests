@@ -63,6 +63,86 @@ def test_crud_upsert_then_get(client):
     r = client.get("/collections/demo/items/nested?folder=a/b", headers={**HOST, **AUTH})
     assert r.json()["name"] == "nested"
 
+# --- 畸形 payload 归 422, 不得 500 穿透 ---
+
+
+def test_malformed_payloads_422(client):
+    # params 非 list-of-dicts
+    r = client.put(
+        "/collections/demo/items/x",
+        json={**ITEM_PAYLOAD, "params": "not-a-list"},
+        headers={**HOST, **AUTH},
+    )
+    assert r.status_code == 422
+    # headers 元素非 dict
+    r = client.put(
+        "/collections/demo/items/x",
+        json={**ITEM_PAYLOAD, "headers": ["not-a-dict"]},
+        headers={**HOST, **AUTH},
+    )
+    assert r.status_code == 422
+    # headers 元素缺 key
+    r = client.put(
+        "/collections/demo/items/x",
+        json={**ITEM_PAYLOAD, "headers": [{"value": "v"}]},
+        headers={**HOST, **AUTH},
+    )
+    assert r.status_code == 422
+    # body 非 mapping
+    r = client.put(
+        "/collections/demo/items/x",
+        json={**ITEM_PAYLOAD, "body": "not-a-dict"},
+        headers={**HOST, **AUTH},
+    )
+    assert r.status_code == 422
+    # 整个请求体非 dict
+    r = client.put("/collections/demo/items/x", json=["not-a-dict"], headers={**HOST, **AUTH})
+    assert r.status_code == 422
+    # 集合配置 defaults.headers 畸形
+    r = client.put(
+        "/collections/demo/collection",
+        json={"defaults": {"headers": ["not-a-dict"]}},
+        headers={**HOST, **AUTH},
+    )
+    assert r.status_code == 422
+    # 环境 vars 非 mapping
+    r = client.put("/environments/dev", json={"vars": ["not-a-dict"]}, headers={**HOST, **AUTH})
+    assert r.status_code == 422
+    # secrets 非 mapping
+    r = client.put(
+        "/environments/dev/secrets", json={"secrets": "not-a-dict"}, headers={**HOST, **AUTH}
+    )
+    assert r.status_code == 422
+
+
+# --- 路径穿越防护: slug/folder 越出集合目录的形态 → 422 ---
+
+
+def test_path_traversal_rejected_422(client):
+    # 先建立合法集合/条目, 保证走到名称校验而非 404
+    assert client.put(
+        "/collections/demo/items/ok", json=ITEM_PAYLOAD, headers={**HOST, **AUTH}
+    ).status_code == 200
+    # slug 含 ..
+    assert client.put(
+        "/collections/demo/items/..evil", json=ITEM_PAYLOAD, headers={**HOST, **AUTH}
+    ).status_code == 422
+    assert client.get("/collections/demo/items/..evil", headers={**HOST, **AUTH}).status_code == 422
+    assert (
+        client.delete("/collections/demo/items/..evil", headers={**HOST, **AUTH}).status_code == 422
+    )
+    # folder 含 .. (查询参数同规则)
+    assert client.put(
+        "/collections/demo/items/x?folder=../evil", json=ITEM_PAYLOAD, headers={**HOST, **AUTH}
+    ).status_code == 422
+    assert (
+        client.get("/collections/demo/items?folder=../../etc", headers={**HOST, **AUTH}).status_code
+        == 422
+    )
+    # 集合名含 ..
+    assert client.get("/collections/..x/collection", headers={**HOST, **AUTH}).status_code == 422
+
+
 # --- TC-009: env / secrets / state 端点形状 ---
 
 

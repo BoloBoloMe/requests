@@ -35,7 +35,14 @@ class NotFoundError(Exception):
 
 
 class _StringSafeLoader(yaml.SafeLoader):
-    """kv 值一律按字符串解析: 移除 bool 隐式解析器 (M2 D002/F002)."""
+    """kv 值一律按字符串解析: 移除 bool 隐式解析器 (M2 D002/F002);
+    读侧同时拒绝锚点/别名 (M2 D002 YAML 子集): 扫描期即抛错."""
+
+    def fetch_anchor(self) -> None:
+        raise yaml.YAMLError("YAML 子集禁用锚点 (M2 D002)")
+
+    def fetch_alias(self) -> None:
+        raise yaml.YAMLError("YAML 子集禁用别名 (M2 D002)")
 
 
 # 拷贝后剔除 bool resolver, 不污染全局 SafeLoader; on/off/yes/no/true/false 读为字符串
@@ -189,12 +196,25 @@ def _kv_to_yaml(kv: KV) -> dict:
     return out
 
 
-def _kv_from_yaml(data: dict) -> KV:
+def _kv_from_yaml(data: Any) -> KV:
+    """单个 kv 归一化; 畸形元素 (非 mapping/缺 key) 抛 ValueError, 壳层归 422."""
+    if not isinstance(data, dict) or "key" not in data:
+        raise ValueError(f"kv 元素应为含 key 的 mapping: {data!r}")
     return KV(
         key=str(data["key"]),
         value=str(data.get("value", "")),
         disabled=_as_bool(data.get("disabled", False)),
     )
+
+
+def kv_seq_from_yaml(raw: Any, field: str) -> list[KV]:
+    """list-of-dicts 形状校验 + kv 归一化 (读写两侧共享, disabled 解析统一走 _as_bool).
+    畸形输入 (非列表/元素非 mapping/缺 key) 一律 ValueError."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError(f"{field} 应为 kv mapping 列表: {raw!r}")
+    return [_kv_from_yaml(entry) for entry in raw]
 
 
 def _body_to_yaml(body: Body) -> dict:
@@ -222,6 +242,8 @@ def _body_to_yaml(body: Body) -> dict:
 def _body_from_yaml(data: Any) -> Body:
     if not data:
         return Body()
+    if not isinstance(data, dict):
+        raise ValueError(f"body 应为 mapping: {data!r}")
     body_type = data.get("type", "none")
     if body_type == "none":
         return Body()
@@ -230,18 +252,26 @@ def _body_from_yaml(data: Any) -> Body:
     if body_type == "form-urlencoded":
         return Body(
             body_type,
-            params=[_kv_from_yaml(kv) for kv in data.get("params", [])],
+            params=kv_seq_from_yaml(data.get("params"), "body.params"),
         )
     if body_type == "multipart":
-        parts = [
-            MultipartPart(
-                name=str(p["name"]),
-                value=None if p.get("value") is None else str(p["value"]),
-                file=None if p.get("file") is None else str(p["file"]),
-                content_type=None if p.get("contentType") is None else str(p["contentType"]),
+        parts_raw = data.get("parts")
+        if parts_raw is None:
+            parts_raw = []
+        if not isinstance(parts_raw, list):
+            raise ValueError(f"body.parts 应为 part mapping 列表: {parts_raw!r}")
+        parts = []
+        for p in parts_raw:
+            if not isinstance(p, dict) or "name" not in p:
+                raise ValueError(f"body.parts 元素应为含 name 的 mapping: {p!r}")
+            parts.append(
+                MultipartPart(
+                    name=str(p["name"]),
+                    value=None if p.get("value") is None else str(p["value"]),
+                    file=None if p.get("file") is None else str(p["file"]),
+                    content_type=None if p.get("contentType") is None else str(p["contentType"]),
+                )
             )
-            for p in data.get("parts", [])
-        ]
         return Body(body_type, parts=parts)
     raise ValueError(f"未知 body.type: {body_type!r}")
 
@@ -270,8 +300,8 @@ def item_from_dict(data: dict) -> Item:
         method=str(data["method"]),
         url=str(data["url"]),
         seq=int(data.get("seq", 0)),
-        params=[_kv_from_yaml(kv) for kv in data.get("params", [])],
-        headers=[_kv_from_yaml(kv) for kv in data.get("headers", [])],
+        params=kv_seq_from_yaml(data.get("params"), "params"),
+        headers=kv_seq_from_yaml(data.get("headers"), "headers"),
         body=_body_from_yaml(data.get("body")),
         auth=data.get("auth"),
         assertions=list(data.get("assert", [])),
@@ -310,12 +340,21 @@ class Store:
         if not path.is_file():
             return CollectionConfig()
         data = _load_yaml(path)
-        defaults_raw = data.get("defaults") or {}
+        vars_raw = data.get("vars")
+        if vars_raw is None:
+            vars_raw = {}
+        if not isinstance(vars_raw, dict):
+            raise ValueError(f"vars 应为 mapping: {path}")
+        defaults_raw = data.get("defaults")
+        if defaults_raw is None:
+            defaults_raw = {}
+        if not isinstance(defaults_raw, dict):
+            raise ValueError(f"defaults 应为 mapping: {path}")
         return CollectionConfig(
-            vars={str(k): str(v) for k, v in (data.get("vars") or {}).items()},
+            vars={str(k): str(v) for k, v in vars_raw.items()},
             defaults=CollectionDefaults(
                 auth=defaults_raw.get("auth"),
-                headers=[_kv_from_yaml(kv) for kv in defaults_raw.get("headers", [])],
+                headers=kv_seq_from_yaml(defaults_raw.get("headers"), "defaults.headers"),
             ),
         )
 
@@ -449,8 +488,8 @@ class Store:
             method=str(data.get("method", "GET")),
             url=str(data.get("url", "")),
             seq=int(data.get("seq", 0)),
-            params=[_kv_from_yaml(kv) for kv in data.get("params", [])],
-            headers=[_kv_from_yaml(kv) for kv in data.get("headers", [])],
+            params=kv_seq_from_yaml(data.get("params"), "params"),
+            headers=kv_seq_from_yaml(data.get("headers"), "headers"),
             body=_body_from_yaml(data.get("body")),
             auth=data.get("auth"),
             assertions=list(data.get("assert", [])),

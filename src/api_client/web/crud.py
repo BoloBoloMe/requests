@@ -10,16 +10,24 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from ..store import (
     CollectionConfig,
     CollectionDefaults,
-    KV,
     NotFoundError,
     Store,
     item_from_dict,
     item_to_dict,
+    kv_seq_from_yaml,
 )
 
+# 畸形 payload 统一归 422: 归一化入口抛 ValueError, 其余类型错误一并兜底
+_SHAPE_ERRORS = (KeyError, ValueError, TypeError, AttributeError)
 
-def _kv_list(raw: list[dict]) -> list[KV]:
-    return [KV(str(kv["key"]), str(kv.get("value", "")), bool(kv.get("disabled", False))) for kv in raw]
+
+def _str_map(raw: Any, field: str) -> dict[str, str]:
+    """vars/secrets 形状校验: 非 mapping 抛 ValueError (壳层归 422)."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{field} 应为 mapping: {raw!r}")
+    return {str(k): str(v) for k, v in raw.items()}
 
 
 def create_crud_router(store: Store, require_token) -> APIRouter:
@@ -47,6 +55,8 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
             entries = store.list_items(collection, folder)
         except NotFoundError:
             raise HTTPException(status_code=404, detail="集合或文件夹不存在") from None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
         return {"items": [{"slug": e.slug, **item_to_dict(e.item)} for e in entries]}
 
     @router.get("/collections/{collection}/items/{slug}")
@@ -58,7 +68,7 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
         try:
             item = item_from_dict(payload)
             store.write_item(collection, slug, item, folder)
-        except (KeyError, ValueError) as exc:
+        except _SHAPE_ERRORS as exc:
             raise HTTPException(status_code=422, detail=f"条目字段形状非法: {exc}") from None
         return item_to_dict(item)
 
@@ -68,6 +78,8 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
             store.delete_item(collection, slug, folder)
         except NotFoundError:
             raise HTTPException(status_code=404, detail="请求条目不存在") from None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
         return Response(status_code=204)
 
     # --- 集合配置 (vars + 集合级默认, M2 D010) ---
@@ -85,12 +97,16 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
         }
 
     def _config_from_dict(data: dict) -> CollectionConfig:
-        defaults_raw = data.get("defaults") or {}
+        defaults_raw = data.get("defaults")
+        if defaults_raw is None:
+            defaults_raw = {}
+        if not isinstance(defaults_raw, dict):
+            raise ValueError(f"defaults 应为 mapping: {defaults_raw!r}")
         return CollectionConfig(
-            vars={str(k): str(v) for k, v in (data.get("vars") or {}).items()},
+            vars=_str_map(data.get("vars"), "vars"),
             defaults=CollectionDefaults(
                 auth=defaults_raw.get("auth"),
-                headers=_kv_list(defaults_raw.get("headers") or []),
+                headers=kv_seq_from_yaml(defaults_raw.get("headers"), "defaults.headers"),
             ),
         )
 
@@ -100,13 +116,15 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
             return _config_to_dict(store.read_collection(collection))
         except NotFoundError:
             raise HTTPException(status_code=404, detail="集合不存在") from None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
 
     @router.put("/collections/{collection}/collection")
     async def put_collection_config(collection: str, payload: dict[str, Any]) -> dict:
         try:
             config = _config_from_dict(payload)
             store.write_collection(collection, config)
-        except (KeyError, ValueError) as exc:
+        except _SHAPE_ERRORS as exc:
             raise HTTPException(status_code=422, detail=f"集合配置形状非法: {exc}") from None
         return _config_to_dict(config)
 
@@ -123,18 +141,18 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
     @router.put("/environments/{name}")
     async def put_environment(name: str, payload: dict[str, Any]) -> dict:
         try:
-            vars_ = {str(k): str(v) for k, v in (payload.get("vars") or {}).items()}
+            vars_ = _str_map(payload.get("vars"), "vars")
             store.write_environment(name, vars_)
-        except ValueError as exc:
+        except _SHAPE_ERRORS as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
         return {"name": name, "vars": vars_}
 
     @router.put("/environments/{name}/secrets")
     async def put_secrets(name: str, payload: dict[str, Any]) -> dict:
         try:
-            secrets = {str(k): str(v) for k, v in (payload.get("secrets") or {}).items()}
+            secrets = _str_map(payload.get("secrets"), "secrets")
             store.write_secrets(name, secrets)
-        except ValueError as exc:
+        except _SHAPE_ERRORS as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
         return {"name": name, "secrets": secrets}
 

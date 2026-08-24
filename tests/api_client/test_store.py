@@ -5,6 +5,7 @@
 """
 
 import pytest
+import yaml
 
 from api_client.store import (
     Body,
@@ -15,6 +16,7 @@ from api_client.store import (
     MultipartPart,
     NotFoundError,
     Store,
+    item_from_dict,
 )
 
 
@@ -119,6 +121,33 @@ def test_yaml_subset_values_stay_strings(store):
     raw.write_text("version: 1\nvars:\n  a: on\n  b: off\n  c: true\n", encoding="utf-8")
     hand = store.read_environment("hand")
     assert hand.vars == {"a": "on", "b": "off", "c": "true"}
+
+
+# TC-007b: YAML 子集 — 读侧禁锚点/别名 (M2 D002)
+def test_yaml_subset_rejects_anchors_and_aliases(store):
+    """手写含 &anchor / *alias 的 YAML: 读取即拒绝, 不得解析."""
+    raw = store.data_dir / "environments" / "anch.yaml"
+    raw.write_text("version: 1\nvars:\n  a: &x hello\n  b: *x\n", encoding="utf-8")
+    with pytest.raises(yaml.YAMLError):
+        store.read_environment("anch")
+
+    # 仅锚点无别名同样拒绝
+    raw.write_text("version: 1\nvars:\n  a: &x hello\n", encoding="utf-8")
+    with pytest.raises(yaml.YAMLError):
+        store.read_environment("anch")
+
+
+# TC-001b: 畸形 payload 在归一化入口即 ValueError (CRUD 壳据此归 422)
+def test_item_from_dict_rejects_malformed_shapes():
+    base = {"name": "x", "method": "GET", "url": "http://x/"}
+    with pytest.raises(ValueError):
+        item_from_dict({**base, "params": "not-a-list"})
+    with pytest.raises(ValueError):
+        item_from_dict({**base, "headers": ["not-a-dict"]})
+    with pytest.raises(ValueError):
+        item_from_dict({**base, "headers": [{"value": "v"}]})  # 元素缺 key
+    with pytest.raises(ValueError):
+        item_from_dict({**base, "body": "not-a-dict"})
 
 
 # TC-005: env 与 secrets 同 schema, 合并时 secrets 优先级最高 (M2 D005/D006)
