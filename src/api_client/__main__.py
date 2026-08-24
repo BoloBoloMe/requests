@@ -58,7 +58,9 @@ def _cmd_serve(args: argparse.Namespace) -> None:
         {"port": port, "token": token, "pid": os.getpid()},
     )
 
-    config = uvicorn.Config(create_app(token), log_level="info", access_log=False)
+    config = uvicorn.Config(
+        create_app(token, data_dir=data_dir), log_level="info", access_log=False
+    )
     server = uvicorn.Server(config)
     try:
         asyncio.run(server.serve(sockets=[sock]))

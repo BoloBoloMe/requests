@@ -3,8 +3,12 @@
 不装 CORSMiddleware: 默认不放行任何跨站 origin (D004-3).
 """
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI
 
+from ..store import Store
+from .crud import create_crud_router
 from .security import (
     AccessLogMiddleware,
     ContentSecurityPolicyMiddleware,
@@ -13,10 +17,16 @@ from .security import (
 )
 
 
-def create_app(token: str) -> FastAPI:
-    """创建服务 app; token 为本次启动的随机凭证 (D004-4)."""
+def create_app(token: str, data_dir: Path | str | None = None) -> FastAPI:
+    """创建服务 app; token 为本次启动的随机凭证 (D004-4).
+
+    data_dir 提供时挂资源 CRUD 路由 (M3 D010); 缺省仅骨架 (供安全中间件单测).
+    """
     app = FastAPI()
     require_token = make_token_dependency(token)
+
+    if data_dir is not None:
+        app.include_router(create_crud_router(Store(data_dir), require_token))
 
     @app.get("/health", dependencies=[Depends(require_token)])
     async def health() -> dict[str, str]:
