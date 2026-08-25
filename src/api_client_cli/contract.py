@@ -54,4 +54,67 @@ OUTPUT_MODES = {
     "pretty": "流式命令 (send/run): 每行以事件 type 开头 + 完整 JSON; 非流式命令: 表格/缩略 (可回退 JSON).",
 }
 
+# 事件字段说明 (schema events 节用; 字段名列表在 EVENTS, 单一事实源)
+EVENT_FIELD_DESCRIPTIONS = {
+    "meta": {
+        "type": "事件类型, 恒为 meta",
+        "timestamp": "ISO-8601 UTC 字符串",
+        "item_ref": "<collection>/<slug>",
+        "item": "<collection>/<slug> (同 item_ref)",
+        "method": "HTTP 方法",
+        "resolved_url": "变量替换后的 URL",
+        "env": "环境名或 null",
+    },
+    "chunk": {
+        "type": "事件类型, 恒为 chunk",
+        "timestamp": "ISO-8601 UTC 字符串",
+        "item": "<collection>/<slug>",
+        "index": "从 0 起的 chunk 序号",
+        "data": "响应负载 (字符串/对象等)",
+    },
+    "done": {
+        "type": "事件类型, 恒为 done",
+        "timestamp": "ISO-8601 UTC 字符串",
+        "item": "<collection>/<slug>",
+        "status": "HTTP 状态码; 传输失败为 null, 断言失败为 assert_failed",
+        "duration_ms": "整数毫秒",
+        "assertions": "断言结果列表 {name/assertion, expected, actual, ok/passed, message}",
+    },
+    "summary": {
+        "type": "事件类型, 恒为 summary",
+        "timestamp": "ISO-8601 UTC 字符串",
+        "total": "条目总数",
+        "passed": "通过数",
+        "failed": "失败数",
+        "items": "每条 {item, status, passed}",
+    },
+}
+
+# run 末尾附 report 事件 (08 沿用, JUnit XML 输出物): 注记, 不入 M4 D003 四事件契约
+RUN_REPORT_NOTE = "run 事件流末尾附 report 事件 {type, format, content} (format=junit, content=JUnit XML 字符串)."
+
+# 命令面 (M4 D001): schema 命令树与 help 共用
+COMMANDS = [
+    {"path": ["send", "<item-ref>"], "options": ["--env NAME", "--var KEY=VALUE (可重复)"], "default_output": "ndjson", "event_stream": ["meta", "chunk", "done"], "description": "执行单个请求条目并流式输出事件."},
+    {"path": ["run", "<collection-ref>"], "options": ["--env NAME", "--var KEY=VALUE (可重复)"], "default_output": "ndjson", "event_stream": ["meta", "chunk", "done", "summary"], "description": "顺序批量执行集合内全部条目; 每条目完整 meta/chunk/done (不吞 chunk), 末尾 summary."},
+    {"path": ["collection", "list"], "options": [], "default_output": "json", "description": "列出集合."},
+    {"path": ["collection", "show", "<ref>"], "options": [], "default_output": "json", "description": "查看集合配置."},
+    {"path": ["item", "list", "<collection-ref>"], "options": [], "default_output": "json", "description": "列出集合内请求条目."},
+    {"path": ["item", "show", "<item-ref>"], "options": [], "default_output": "json", "description": "查看请求条目定义."},
+    {"path": ["env", "list"], "options": [], "default_output": "json", "description": "列出环境."},
+    {"path": ["env", "show", "<name>"], "options": [], "default_output": "json", "description": "查看环境变量."},
+    {"path": ["history", "list"], "options": [], "default_output": "json", "description": "列出最近执行历史."},
+    {"path": ["history", "show", "<id>"], "options": [], "default_output": "json", "description": "查看单条历史."},
+    {"path": ["service", "status"], "options": [], "default_output": "json", "description": "服务运行状态 {status,pid,port,version}."},
+    {"path": ["service", "stop"], "options": [], "default_output": "json", "description": "停止服务 (按 --data-dir 定位)."},
+    {"path": ["service", "token"], "options": [], "default_output": "json", "description": "显示当前服务 token."},
+    {"path": ["schema"], "options": [], "default_output": "json", "description": "输出本机读契约."},
+    {"path": ["guide"], "options": [], "default_output": "text", "description": "输出文读手册 (llms.txt 风格)."},
+]
+
+GLOBAL_FLAGS = [
+    {"name": "--output", "type": "choice", "choices": ["json", "ndjson", "pretty"], "default": "按命令默认 (send/run 为 ndjson, 其余 json)", "description": "输出形态."},
+    {"name": "--data-dir", "type": "path", "default": "~/.local/share/api-client/", "description": "数据仓库目录."},
+]
+
 DEFAULT_DATA_DIR = "~/.local/share/api-client"

@@ -8,8 +8,17 @@ import argparse
 import subprocess
 import sys
 
-from . import client, contract
+from . import contract
 from .commands_history import cmd_history_list, cmd_history_show
+from .commands_meta import cmd_guide, cmd_schema
+from .commands_resources import (
+    cmd_collection_list,
+    cmd_collection_show,
+    cmd_env_list,
+    cmd_env_show,
+    cmd_item_list,
+    cmd_item_show,
+)
 from .commands_run import cmd_run
 from .commands_send import cmd_send
 from .commands_service import cmd_status, cmd_stop, cmd_token
@@ -34,25 +43,6 @@ def _epilog() -> str:
         "Event stream:\n  " + contract.EVENT_STREAM_LINE + "\n\n"
         "Agent examples: apic schema | apic guide | apic send <collection>/<slug> | apic run <collection>"
     )
-
-
-def _placeholder(name: str):
-    """业务命令占位 (后续 issue 实现): 先 connect 幂等拉起 (服务在则不动作), 再报未实现."""
-
-    def handler(args) -> int:
-        client.connect(args.data_dir)
-        raise CliError("SERVICE_ERROR", f"命令尚未实现 (占位): {name}")
-
-    return handler
-
-
-def _meta_placeholder(name: str):
-    """元命令占位: 离线可答, 不拉起服务."""
-
-    def handler(args) -> int:
-        raise CliError("SERVICE_ERROR", f"命令尚未实现 (占位): {name}")
-
-    return handler
 
 
 def _add_global(parser: argparse.ArgumentParser, suppress: bool = False) -> None:
@@ -85,29 +75,58 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", parser_class=JSONErrorParser)
 
-    send = subparsers.add_parser("send", parents=[parent], help="执行单个请求条目并流式输出事件.")
+    send = subparsers.add_parser(
+        "send",
+        parents=[parent],
+        help="执行单个请求条目并流式输出事件.",
+        epilog="示例: apic send demo/get-json | apic send demo/get-json --env dev --var host=127.0.0.1:9000",
+    )
     send.add_argument("item_ref", metavar="<item-ref>", help="条目引用, 格式 <collection>/<slug>.")
     send.add_argument("--env", default=None, help="环境名.")
     send.add_argument("--var", action="append", metavar="KEY=VALUE", help="覆盖变量 (可重复); 优先于环境变量.")
     send.set_defaults(func=cmd_send)
 
-    run = subparsers.add_parser("run", parents=[parent], help="批量执行集合内全部条目.")
+    run = subparsers.add_parser(
+        "run",
+        parents=[parent],
+        help="批量执行集合内全部条目.",
+        epilog="示例: apic run demo | apic run demo --env dev --var host=127.0.0.1:9000",
+    )
     run.add_argument("collection_ref", metavar="<collection-ref>")
     run.add_argument("--env", default=None, help="环境名.")
     run.add_argument("--var", action="append", metavar="KEY=VALUE", help="覆盖变量 (可重复); 优先于环境变量.")
     run.set_defaults(func=cmd_run)
 
-    for group, verbs in (
-        ("collection", ("list", "show")),
-        ("item", ("list", "show")),
-        ("env", ("list", "show")),
-    ):
-        group_parser = subparsers.add_parser(group, help=f"{group} 资源查询.")
-        group_sub = group_parser.add_subparsers(dest=f"{group}_cmd", parser_class=JSONErrorParser)
-        for verb in verbs:
-            verb_parser = group_sub.add_parser(verb, parents=[parent])
-            verb_parser.add_argument("ref", nargs="?", default=None)
-            verb_parser.set_defaults(func=_placeholder(f"{group} {verb}"))
+    collection = subparsers.add_parser(
+        "collection", help="集合资源查询.", epilog="示例: apic collection list | apic collection show demo"
+    )
+    collection_sub = collection.add_subparsers(dest="collection_cmd", parser_class=JSONErrorParser)
+    collection_sub.add_parser("list", parents=[parent], help="列出集合.", epilog="示例: apic collection list").set_defaults(
+        func=cmd_collection_list
+    )
+    collection_show = collection_sub.add_parser(
+        "show", parents=[parent], help="查看集合配置.", epilog="示例: apic collection show demo"
+    )
+    collection_show.add_argument("ref", metavar="<ref>")
+    collection_show.set_defaults(func=cmd_collection_show)
+
+    item = subparsers.add_parser(
+        "item", help="请求条目查询.", epilog="示例: apic item list demo | apic item show demo/get-json"
+    )
+    item_sub = item.add_subparsers(dest="item_cmd", parser_class=JSONErrorParser)
+    item_list = item_sub.add_parser("list", parents=[parent], help="列出集合内请求条目.", epilog="示例: apic item list demo")
+    item_list.add_argument("collection_ref", metavar="<collection-ref>")
+    item_list.set_defaults(func=cmd_item_list)
+    item_show = item_sub.add_parser("show", parents=[parent], help="查看请求条目定义.", epilog="示例: apic item show demo/get-json")
+    item_show.add_argument("item_ref", metavar="<item-ref>")
+    item_show.set_defaults(func=cmd_item_show)
+
+    env = subparsers.add_parser("env", help="环境查询.", epilog="示例: apic env list | apic env show dev")
+    env_sub = env.add_subparsers(dest="env_cmd", parser_class=JSONErrorParser)
+    env_sub.add_parser("list", parents=[parent], help="列出环境.", epilog="示例: apic env list").set_defaults(func=cmd_env_list)
+    env_show = env_sub.add_parser("show", parents=[parent], help="查看环境变量.", epilog="示例: apic env show dev")
+    env_show.add_argument("name", metavar="<name>")
+    env_show.set_defaults(func=cmd_env_show)
 
     history = subparsers.add_parser("history", help="执行历史查询.", epilog="示例: apic history list | apic history show <id>")
     history_sub = history.add_subparsers(dest="history_cmd", parser_class=JSONErrorParser)
@@ -122,8 +141,12 @@ def build_parser() -> argparse.ArgumentParser:
     service_sub.add_parser("stop", parents=[parent], help="停止服务 (按 --data-dir 定位).").set_defaults(func=cmd_stop)
     service_sub.add_parser("token", parents=[parent], help="显示当前服务 token.").set_defaults(func=cmd_token)
 
-    subparsers.add_parser("schema", parents=[parent], help="输出完整机读契约 (JSON).").set_defaults(func=_meta_placeholder("schema"))
-    subparsers.add_parser("guide", parents=[parent], help="输出文读手册 (llms.txt 风格).").set_defaults(func=_meta_placeholder("guide"))
+    subparsers.add_parser(
+        "schema", parents=[parent], help="输出完整机读契约 (JSON).", epilog="示例: apic schema"
+    ).set_defaults(func=cmd_schema)
+    subparsers.add_parser(
+        "guide", parents=[parent], help="输出文读手册 (llms.txt 风格).", epilog="示例: apic guide"
+    ).set_defaults(func=cmd_guide)
     return parser
 
 
