@@ -31,4 +31,5 @@ packages = ["src/testbed", "src/api_client", "src/api_client_cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/testbed", "tests/api_client", "tests/api_client_cli"]
+addopts = "--import-mode=importlib"  # tests/api_client 与 tests/api_client_cli 存在同名测试文件 (test_history.py)
 timeout = 300  # 单条用例兜底上限 (防挂), pytest-timeout 强杀
