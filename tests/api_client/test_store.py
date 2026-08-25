@@ -164,6 +164,15 @@ def test_environment_secrets_merge_highest_priority(store):
     assert (base / "dev.secrets.yaml").is_file()
 
 
+# 环境列表: 扫 environments/*.yaml, 排除 *.secrets.yaml, 文件名排序; 空仓库 → 空列表
+def test_list_environments_excludes_secrets(store):
+    assert store.list_environments() == []  # 空仓库不报错
+    store.write_environment("prod", {"host": "http://prod"})
+    store.write_environment("dev", {"host": "http://dev"})
+    store.write_secrets("dev", {"token": "s3cret"})
+    assert store.list_environments() == ["dev", "prod"]  # 字典序, 无 secrets 名
+
+
 # TC-006: 激活环境存 .local/state.yaml, 未设时为空 (M2 D007)
 def test_state_active_environment_roundtrip(store):
     assert store.get_active_environment() is None

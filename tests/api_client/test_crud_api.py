@@ -146,6 +146,22 @@ def test_path_traversal_rejected_422(client):
 # --- TC-009: env / secrets / state 端点形状 ---
 
 
+def test_list_environments_endpoint(client):
+    # 空仓库 → 200 空列表 (不 404)
+    assert client.get("/environments", headers={**HOST, **AUTH}).json() == {"environments": []}
+
+    for name in ("prod", "dev"):
+        assert client.put(
+            f"/environments/{name}", json={"vars": {"host": f"http://{name}"}}, headers={**HOST, **AUTH}
+        ).status_code == 200
+    assert client.put(
+        "/environments/dev/secrets", json={"secrets": {"token": "s3cret"}}, headers={**HOST, **AUTH}
+    ).status_code == 200
+
+    got = client.get("/environments", headers={**HOST, **AUTH}).json()["environments"]
+    assert got == ["dev", "prod"]  # 字典序; 无 dev.secrets 名
+
+
 def test_environment_secrets_state_endpoints(client):
     r = client.put(
         "/environments/dev",
@@ -182,6 +198,7 @@ def test_crud_requires_token(client):
         "/collections/demo/items/ping", json=ITEM_PAYLOAD, headers=HOST
     ).status_code == 401
     assert client.get("/state", headers=HOST).status_code == 401
+    assert client.get("/environments", headers=HOST).status_code == 401
 
 
 # --- 集合配置端点薄壳 (vars + 集合级默认) ---

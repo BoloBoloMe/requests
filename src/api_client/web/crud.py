@@ -130,6 +130,10 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
 
     # --- 环境 / secrets / 激活状态 ---
 
+    @router.get("/environments")
+    async def list_environments() -> dict:
+        return {"environments": store.list_environments()}
+
     @router.get("/environments/{name}")
     async def get_environment(name: str) -> dict:
         try:

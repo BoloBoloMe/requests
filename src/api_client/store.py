@@ -369,6 +369,17 @@ class Store:
 
     # --- 环境/secrets (M2 D005/D006) ---
 
+    def list_environments(self) -> list[str]:
+        """环境名列表 (文件名去 .yaml 后缀), 字典序; 排除 *.secrets.yaml; 目录缺失/空 → 空列表."""
+        base = self.data_dir / "environments"
+        if not base.is_dir():
+            return []
+        return sorted(
+            path.name[: -len(".yaml")]
+            for path in base.glob("*.yaml")
+            if not path.name.endswith(".secrets.yaml")
+        )
+
     def _env_path(self, name: str, secrets: bool = False) -> Path:
         _validate_name("环境", name)
         suffix = ".secrets.yaml" if secrets else ".yaml"
