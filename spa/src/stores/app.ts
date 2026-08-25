@@ -212,6 +212,14 @@ export function createAppStore(services: ApiServices) {
     const { collection, slug, folder } = state.selected;
     const snapshot = JSON.parse(JSON.stringify(state.draft)) as ItemData;
     await services.putItem(collection, slug, snapshot, folder);
+    // 树显示字段 (名称/方法) 原地同步, 避免整树重建坍缩展开态
+    if (!state.root) return;
+    const node = findFolder(state.root, folder);
+    const entry = node.items.find((i) => i.slug === slug);
+    if (entry) {
+      entry.item.name = snapshot.name;
+      entry.item.method = snapshot.method;
+    }
   }
 
   /** 文件夹/集合批量运行 (RUN-01): 消费 run 事件流驱动树徽标与红字明细 */

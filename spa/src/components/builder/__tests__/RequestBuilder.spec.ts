@@ -77,6 +77,9 @@ describe("RequestBuilder 组装", () => {
     expect(store.state.draft?.name).toBe("创建订单-改");
     await wrapper.find("[data-action=save]").trigger("click");
     expect(putSpy.mock.calls.at(-1)?.[2].name).toBe("创建订单-改");
+    // 树显示名原地同步 (不重建整树)
+    const node = store.state.root!.folders.find((f) => f.name === "订单")!;
+    expect(node.items.find((i) => i.slug === "create")?.item.name).toBe("创建订单-改");
   });
 
   it("URL 首尾空白提交即截断", async () => {
