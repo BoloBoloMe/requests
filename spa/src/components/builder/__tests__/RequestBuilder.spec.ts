@@ -63,6 +63,31 @@ describe("RequestBuilder 组装", () => {
     wrapper.unmount();
   });
 
+  it("条目名可改 (失焦提交, 空白忽略), 保存后写回", async () => {
+    const { wrapper, store, services } = await mountBuilder();
+    const putSpy = vi.spyOn(services, "putItem");
+    const nameInput = wrapper.find("input.itemname");
+    expect(nameInput.exists()).toBe(true);
+    await nameInput.setValue("  创建订单-改  ");
+    await nameInput.trigger("change");
+    expect(store.state.draft?.name).toBe("创建订单-改");
+    // 空白不改名
+    await nameInput.setValue("   ");
+    await nameInput.trigger("change");
+    expect(store.state.draft?.name).toBe("创建订单-改");
+    await wrapper.find("[data-action=save]").trigger("click");
+    expect(putSpy.mock.calls.at(-1)?.[2].name).toBe("创建订单-改");
+  });
+
+  it("URL 首尾空白提交即截断", async () => {
+    const { wrapper, store } = await mountBuilder();
+    await wrapper.find(".urlin").trigger("click");
+    const input = wrapper.find("input.urlin");
+    await input.setValue("  https://api.example.com/x  ");
+    await input.trigger("keydown", { key: "Enter" });
+    expect(store.state.draft?.url).toBe("https://api.example.com/x");
+  });
+
   it("发送按钮触发执行 (SSE 消费经 store.send, ISSUE-04 接线)", async () => {
     const { wrapper, store, services } = await mountBuilder();
     const execSpy = vi.spyOn(services, "execute");

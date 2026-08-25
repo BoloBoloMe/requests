@@ -880,3 +880,41 @@ body {
   z-index: 30;
   padding: 10px;
 }
+
+/* 条目名输入 (构建器顶部): 无边框标题态, 聚焦出边框 */
+.vb .itemname {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 8px;
+  margin: 8px 12px 0;
+  color: var(--fg);
+}
+.vb .itemname:hover,
+.vb .itemname:focus {
+  border-color: var(--bd);
+  background: #fff;
+  outline: none;
+}
+
+/* Body 视图切换 (漂亮 JSON / 树): 迷你 tab */
+.vb .bodyview {
+  display: flex;
+  gap: 2px;
+  padding: 6px 12px 0;
+}
+.vb .bodyview span {
+  padding: 2px 9px;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--dim);
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+}
+.vb .bodyview span.on {
+  color: var(--fg);
+  background: #f0efec;
+}

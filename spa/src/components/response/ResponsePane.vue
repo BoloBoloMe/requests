@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 响应查看器 (ISSUE-04, 原型变体 B .resp): 头行 + 三 tab (Body/Headers/日志)
 // 数据源: store.send() 累积的 SSE 事件 (meta/chunk/done) + 历史转录 (Headers/日志)
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useStore } from "../../stores/app";
 import JsonTree from "./JsonTree.vue";
 import ResponseHeader from "./ResponseHeader.vue";
@@ -12,7 +12,7 @@ const resp = computed(() => store.state.response);
 
 const TABS = ["Body", "Headers", "日志"] as const;
 
-/** Body: 尝试 JSON 解析 → 树; 失败降级裸文本 (RES-02) */
+/** Body: 尝试 JSON 解析 → 默认漂亮 JSON 文本, 可切树视图 (RES-02) */
 const bodyJson = computed(() => {
   const text = resp.value?.bodyText ?? "";
   if (!text) return { ok: false as const, value: null };
@@ -22,6 +22,12 @@ const bodyJson = computed(() => {
     return { ok: false as const, value: null };
   }
 });
+
+/** JSON 漂亮打印 (两格缩进); Body 视图默认漂亮文本, 可切交互树 */
+const bodyPretty = computed(() =>
+  bodyJson.value.ok ? JSON.stringify(bodyJson.value.value, null, 2) : "",
+);
+const bodyView = ref<"pretty" | "tree">("pretty");
 
 const headers = computed(() => resp.value?.history?.response?.headers ?? []);
 
@@ -59,7 +65,14 @@ const showTabs = computed(() => resp.value?.done != null);
     </div>
     <div v-if="showTabs" class="r-body">
       <template v-if="store.state.responseTab === 'Body'">
-        <JsonTree v-if="bodyJson.ok" :key="resp?.done?.timestamp" :data="bodyJson.value" />
+        <template v-if="bodyJson.ok">
+          <div class="bodyview">
+            <span :class="{ on: bodyView === 'pretty' }" @click="bodyView = 'pretty'">JSON</span>
+            <span :class="{ on: bodyView === 'tree' }" @click="bodyView = 'tree'">树</span>
+          </div>
+          <pre v-if="bodyView === 'pretty'" :key="`p-${resp?.done?.timestamp}`" class="rawtext">{{ bodyPretty }}</pre>
+          <JsonTree v-else :key="resp?.done?.timestamp" :data="bodyJson.value" />
+        </template>
         <pre v-else class="rawtext">{{ resp?.bodyText || "(空响应体)" }}</pre>
       </template>
       <div v-else-if="store.state.responseTab === 'Headers'" class="json">

@@ -54,6 +54,16 @@ watch(
 <template>
   <div class="reqpane col">
     <template v-if="draft">
+      <!-- 条目名可改 (显示名, 不影响 slug/文件名); 失焦/回车提交, 空白忽略 -->
+      <input
+        class="itemname"
+        :value="draft.name"
+        placeholder="请求名称"
+        @change="
+          ($event.target as HTMLInputElement).value.trim() &&
+          (draft.name = ($event.target as HTMLInputElement).value.trim())
+        "
+      />
       <UrlBar
         :url="draft.url"
         :method="draft.method"

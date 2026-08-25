@@ -27,7 +27,9 @@ function startEdit(): void {
 
 function commitEdit(): void {
   editing.value = false;
-  if (draft.value !== props.url) emit("update:url", draft.value);
+  // URL 首尾空白无意义, 提交即截断 (防手滑空格导致解析/发送失败)
+  const cleaned = draft.value.trim();
+  if (cleaned !== props.url) emit("update:url", cleaned);
 }
 
 const methodClass = computed(() =>

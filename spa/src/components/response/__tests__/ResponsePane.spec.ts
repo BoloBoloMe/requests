@@ -61,7 +61,9 @@ describe("ResponsePane 组装", () => {
     expect(wrapper.find(".r-hd .status").classes()).toContain("ok");
     expect(wrapper.find(".r-hd .status").text()).toContain("200");
     expect(wrapper.find(".asserts").text()).toContain("断言 1/1");
-    // Body tab 默认: JSON 树
+    // Body tab 默认: 漂亮 JSON 文本 (缩进格式化); 切「树」出交互树
+    expect(wrapper.find(".rawtext").text()).toContain('\n  "id": 1024');
+    await wrapper.findAll(".bodyview span").find((s) => s.text() === "树")!.trigger("click");
     expect(wrapper.find(".json").exists()).toBe(true);
     expect(wrapper.text()).toContain("1024");
   });
