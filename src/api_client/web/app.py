@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI
 
 from ..store import Store
 from .crud import create_crud_router
+from .execute import create_execute_router
 from .security import (
     AccessLogMiddleware,
     ContentSecurityPolicyMiddleware,
@@ -26,7 +27,9 @@ def create_app(token: str, data_dir: Path | str | None = None) -> FastAPI:
     require_token = make_token_dependency(token)
 
     if data_dir is not None:
-        app.include_router(create_crud_router(Store(data_dir), require_token))
+        store = Store(data_dir)
+        app.include_router(create_crud_router(store, require_token))
+        app.include_router(create_execute_router(store, require_token))
 
     @app.get("/health", dependencies=[Depends(require_token)])
     async def health() -> dict[str, str]:

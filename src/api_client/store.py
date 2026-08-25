@@ -478,6 +478,49 @@ class Store:
         entries.sort(key=lambda e: (e.item.seq, e.slug))
         return entries
 
+    # --- 历史 (M2 D011): 发送即记录 append, gitignored, v1 不做自动清理 ---
+
+    def _history_dir(self, collection: str, slug: str, folder: str = "") -> Path:
+        base = self.data_dir / ".local" / "history" / collection
+        if folder:
+            for part in folder.split("/"):
+                _validate_name("文件夹", part)
+            base = base / folder
+        _validate_name("条目", slug)
+        return base / slug
+
+    def append_history(
+        self, collection: str, slug: str, record: dict, folder: str = ""
+    ) -> Path:
+        """追加一条历史: 时间戳文件名 (UTC 可排序), tmp+rename 原子写.
+        文件名与 record[\"timestamp\"] 同源, 调用方缺省时由本方法补上."""
+        timestamp = record.get("timestamp")
+        if timestamp is None:
+            from datetime import datetime, timezone
+
+            timestamp = datetime.now(timezone.utc).isoformat()
+            record["timestamp"] = timestamp
+        # 时间戳 -> 可排序文件名片段 (只留字母数字, 字典序 = 时序)
+        safe = re.sub(r"[^0-9A-Za-z]", "", str(timestamp))
+        payload = {"version": FORMAT_VERSION, **record}
+        path = self._history_dir(collection, slug, folder) / f"{safe}.yaml"
+        _atomic_write_text(path, _dump_yaml(payload))
+        return path
+
+    def list_history(
+        self, collection: str, slug: str, folder: str = ""
+    ) -> list[dict]:
+        """按时间序列出条目历史 (文件名即时间戳, 字典序=时序); 无记录回空列表."""
+        base = self._history_dir(collection, slug, folder)
+        if not base.is_dir():
+            return []
+        entries = []
+        for path in sorted(base.glob("*.yaml")):
+            data = _load_yaml(path)
+            data.pop("version", None)
+            entries.append({"file": path.name, **data})
+        return entries
+
     def read_item(self, collection: str, slug: str, folder: str = "") -> Item:
         path = self._item_path(collection, slug, folder)
         if not path.is_file():

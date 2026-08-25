@@ -98,11 +98,62 @@ class Engine:
     def _files_base_dir(self) -> Path:
         return self._store.data_dir if self._store is not None else Path.cwd()
 
-    def _request_kwargs(self, request: ResolvedRequest) -> dict[str, Any]:
-        """ResolvedRequest -> client.stream(...) 参数: headers/params/body/认证."""
+    def _request_snapshot(
+        self,
+        request: ResolvedRequest,
+        headers: list[tuple[str, str]],
+        params: list[tuple[str, str]],
+    ) -> dict[str, Any]:
+        """历史请求侧快照 (M2 D011): 记实际发送内容 (disabled 已滤除, 认证已应用);
+        multipart 落文件引用路径+大小, 不内联文件内容."""
+        snapshot: dict[str, Any] = {
+            "method": request.method,
+            "url": request.url,
+            "params": [{"key": k, "value": v} for k, v in params],
+            "headers": [{"key": k, "value": v} for k, v in headers],
+        }
+        body = request.body
+        if body.type == "none":
+            snapshot["body"] = None
+        elif body.type in ("json", "text"):
+            snapshot["body"] = {"type": body.type, "text": body.text}
+        elif body.type == "form-urlencoded":
+            snapshot["body"] = {
+                "type": body.type,
+                "params": [
+                    {"key": kv.key, "value": kv.value}
+                    for kv in body.params
+                    if not kv.disabled
+                ],
+            }
+        elif body.type == "multipart":
+            parts: list[dict[str, Any]] = []
+            for part in body.parts:
+                if part.file is None:
+                    parts.append({"name": part.name, "value": part.value or ""})
+                    continue
+                path = Path(part.file)
+                if not path.is_absolute():
+                    path = self._files_base_dir() / path
+                try:
+                    size: int | None = path.stat().st_size
+                except OSError:
+                    size = None
+                entry: dict[str, Any] = {"name": part.name, "file": part.file, "size": size}
+                if part.content_type is not None:
+                    entry["contentType"] = part.content_type
+                parts.append(entry)
+            snapshot["body"] = {"type": "multipart", "parts": parts}
+        return snapshot
+
+    def _request_kwargs(
+        self, request: ResolvedRequest
+    ) -> tuple[dict[str, Any], list[tuple[str, str]], list[tuple[str, str]]]:
+        """ResolvedRequest -> client.stream(...) 参数; 同时返回生效 headers/params
+        (认证已应用), 供历史快照记实际发送内容 (bearer 明文进历史, M5 决策 5)."""
         headers = [(kv.key, kv.value) for kv in request.headers if not kv.disabled]
         params = [(kv.key, kv.value) for kv in request.params if not kv.disabled]
-        kwargs: dict[str, Any] = {"headers": headers, "params": params}
+        kwargs: dict[str, Any] = {"headers": headers}
         header_names = {k.lower() for k, _ in headers}
 
         body = request.body
@@ -153,7 +204,12 @@ class Engine:
                 )
             else:
                 raise ValueError(f"未知认证类型: {auth_type!r}")
-        return kwargs
+        if params:
+            # 空 params 也要避开: httpx 收到 params=[] 会重建 query string,
+            # 把 url 里已有的 ?a=1 整个抹掉 (TC-010 抓到的真 bug);
+            # 赋值放在认证处理后: apikey in=query 可能追加 params
+            kwargs["params"] = params
+        return kwargs, headers, params
 
     async def _run(
         self,
@@ -202,15 +258,31 @@ class Engine:
         status: int | None = None
         error: dict | None = None
         chunk_index = 0
+        # 历史捕获 (M2 D011): sent=False 表示请求未发出 (构造失败), 不落历史
+        sent = False
+        is_sse = False
+        response_headers: list[dict[str, str]] = []
+        eff_headers: list[tuple[str, str]] = []
+        eff_params: list[tuple[str, str]] = []
+        content_type = ""
+        body_text: str | None = None
+        body_size = 0
+        sse_payloads: list[str] = []
         try:
-            kwargs = self._request_kwargs(request)
+            kwargs, eff_headers, eff_params = self._request_kwargs(request)
+            sent = True
             # trust_env=False: 绕开环境代理变量 (SOCKS 代理会把本机回环也劫走)
             async with httpx.AsyncClient(trust_env=False, timeout=timeout) as client:
                 async with client.stream(request.method, request.url, **kwargs) as resp:
                     status = resp.status_code
+                    response_headers = [
+                        {"key": k, "value": v} for k, v in resp.headers.multi_items()
+                    ]
                     content_type = resp.headers.get("content-type", "")
                     if content_type.startswith("text/event-stream"):
+                        is_sse = True
                         async for payload in _iter_sse_data(resp):
+                            sse_payloads.append(payload)
                             await queue.put(
                                 {
                                     "type": "chunk",
@@ -223,10 +295,9 @@ class Engine:
                             chunk_index += 1
                     else:
                         parts: list[bytes] = []
-                        size = 0
                         async for data in resp.aiter_bytes():
-                            size += len(data)
-                            if size > MAX_RESPONSE_BYTES:
+                            body_size += len(data)
+                            if body_size > MAX_RESPONSE_BYTES:
                                 error = {
                                     "code": "RESPONSE_TOO_LARGE",
                                     "message": f"响应超过大小上限 {MAX_RESPONSE_BYTES} 字节",
@@ -234,13 +305,14 @@ class Engine:
                                 break
                             parts.append(data)
                         if error is None and _is_text_content_type(content_type):
+                            body_text = b"".join(parts).decode("utf-8", errors="replace")
                             await queue.put(
                                 {
                                     "type": "chunk",
                                     "timestamp": _now_iso(),
                                     "item": item_ref,
                                     "index": chunk_index,
-                                    "data": b"".join(parts).decode("utf-8", errors="replace"),
+                                    "data": body_text,
                                 }
                             )
         except httpx.TimeoutException:
@@ -253,9 +325,90 @@ class Engine:
             error = {"code": "UNEXPECTED_ERROR", "message": f"{type(exc).__name__}: {exc}"}
             raise
         finally:
+            # SSE 未关闭不落 (M2 D011): 流中途出错 (超时/断线) 不聚合落盘
+            if sent and not (is_sse and error is not None):
+                self._write_history(
+                    request,
+                    eff_headers,
+                    eff_params,
+                    item_ref=item_ref,
+                    collection=collection,
+                    slug=slug,
+                    folder=folder,
+                    status=status,
+                    response_headers=response_headers,
+                    content_type=content_type,
+                    is_sse=is_sse,
+                    sse_payloads=sse_payloads,
+                    body_text=body_text,
+                    body_size=body_size,
+                    error=error,
+                    duration_ms=int((time.monotonic() - start) * 1000),
+                )
             # 收尾必达 (防挂): 任何路径都发 done + 哨兵, 消费者 queue.get() 不会永久阻塞
             await queue.put(done_event(status, error))
             await queue.put(None)  # 哨兵
+    # --- 历史写入口 (M2 D011: 发送即记录, 副作用经 Store; 不脱敏 M5 决策 5) ---
+
+    def _write_history(
+        self,
+        request: ResolvedRequest,
+        headers: list[tuple[str, str]],
+        params: list[tuple[str, str]],
+        *,
+        item_ref: str,
+        collection: str | None,
+        slug: str | None,
+        folder: str,
+        status: int | None,
+        response_headers: list[dict[str, str]],
+        content_type: str,
+        is_sse: bool,
+        sse_payloads: list[str],
+        body_text: str | None,
+        body_size: int,
+        error: dict | None,
+        duration_ms: int,
+    ) -> None:
+        if self._store is None or not collection or not slug:
+            return  # 无仓库或无定位信息: 纯执行 (如引擎单测), 不落历史
+        record: dict[str, Any] = {
+            "timestamp": _now_iso(),
+            "item": item_ref,
+            "duration_ms": duration_ms,
+            "request": self._request_snapshot(request, headers, params),
+        }
+        if status is None:
+            record["response"] = None  # 响应头都没等到 (如超时)
+        else:
+            if is_sse:
+                # 连接已关闭: 已收事件聚合为一个文本体 (M2 D011)
+                response_body: dict[str, Any] = {
+                    "kind": "text",
+                    "content_type": content_type,
+                    "text": "\n\n".join(sse_payloads),
+                }
+            elif body_text is not None:
+                response_body = {
+                    "kind": "text",
+                    "content_type": content_type,
+                    "text": body_text,
+                }
+            else:
+                # 非文本或超大 body 只落元信息 (content-type/大小)
+                response_body = {
+                    "kind": "binary",
+                    "content_type": content_type,
+                    "size": body_size,
+                }
+            record["response"] = {
+                "status": status,
+                "headers": response_headers,
+                "body": response_body,
+            }
+        if error is not None:
+            record["error"] = error
+        self._store.append_history(collection, slug, record, folder)
 
 
 async def _iter_sse_data(resp: httpx.Response) -> AsyncIterator[str]:

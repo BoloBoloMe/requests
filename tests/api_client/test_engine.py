@@ -171,6 +171,73 @@ def test_engine_multipart_file_upload(testbed_url, tmp_path):
     assert "inline-text" in echoed["body"]["text"]
 
 
+# --- TC-008: /sse?count=5 -> 5 个 chunk 事件 (SSE 流式, M3 D006) ---
+
+
+def test_engine_sse_five_chunks(testbed_url):
+    """text/event-stream 逐帧转 chunk 事件: 帧序保留 (index 递增), done 200.
+
+    与 TC-009 对照: read 超时是 "等下一字节的间隔上限", SSE 事件间隔
+    (interval=0.01s) 远小于 READ_TIMEOUT_SECONDS, 流不被总长掐断.
+    """
+    import json
+
+    request = ResolvedRequest(
+        name="sse", method="GET", url=f"{testbed_url}/sse?count=5&interval=0.01"
+    )
+    events = _collect(Engine(), request, item_ref="demo/sse", env=None)
+
+    chunks = [e for e in events if e["type"] == "chunk"]
+    assert len(chunks) == 5
+    assert [c["index"] for c in chunks] == [0, 1, 2, 3, 4]
+    assert [json.loads(c["data"])["seq"] for c in chunks] == [0, 1, 2, 3, 4]
+
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["status"] == 200
+    assert "error" not in done
+
+
+# --- TC-009: /delay/5 超内置读超时 -> 超时事件且不悬挂 (M3 D013) ---
+
+
+def test_engine_read_timeout_event(testbed_url):
+    """/delay/5 (服务端睡 5s) > READ_TIMEOUT_SECONDS (4s): done 带 TIMEOUT error,
+    流正常收尾 (meta -> done, 无 chunk), 不悬挂."""
+    import time
+
+    request = ResolvedRequest(name="slow", method="GET", url=f"{testbed_url}/delay/5")
+    start = time.monotonic()
+    events = _collect(Engine(), request, item_ref="demo/slow", env=None)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 30  # 悬挂即慢到离谱; pytest-timeout=300 兜底
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["status"] is None  # 响应头都没等到
+    assert done["error"]["code"] == "TIMEOUT"
+    assert not [e for e in events if e["type"] == "chunk"]
+
+
+# --- TC-010: /large 超响应大小上限 -> 上限事件 (M3 D013) ---
+
+
+def test_engine_response_too_large_event(testbed_url):
+    """/large?bytes=6MB > MAX_RESPONSE_BYTES (5MB): done 带 RESPONSE_TOO_LARGE error,
+    状态码已拿到 (响应头先到), 超限即中断读取."""
+    request = ResolvedRequest(
+        name="large",
+        method="GET",
+        url=f"{testbed_url}/large?bytes={6 * 1024 * 1024}",
+    )
+    events = _collect(Engine(), request, item_ref="demo/large", env=None)
+
+    done = events[-1]
+    assert done["type"] == "done"
+    assert done["status"] == 200
+    assert done["error"]["code"] == "RESPONSE_TOO_LARGE"
+
+
 # --- 防挂钉死: 未知认证类型 (ISSUE-03 前置修复) ---
 
 
