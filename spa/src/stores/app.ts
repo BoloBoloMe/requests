@@ -129,8 +129,24 @@ export function createAppStore(services: ApiServices) {
     state.envVars = env.merged;
   }
 
+  /** 集合绑定状态清零 (切/新建集合防旧集合残留): 选中条目/草稿/响应面板/运行徽标/
+   *  断言高亮/进行中标记; 全局状态 (collections/envs/activeEnv/envVars/git) 不动. */
+  function clearCollectionState(): void {
+    state.selected = null;
+    state.draft = null;
+    state.response = null;
+    state.responseTab = "Body";
+    state.runResults = {};
+    state.assertionHighlight = null;
+    state.builderTab = "Params";
+    state.sending = false;
+    state.running = false;
+    state.runDone = null;
+  }
+
   async function selectCollection(name: string): Promise<void> {
     state.collection = name;
+    clearCollectionState();
     state.root = await buildFolder(name, "", name);
     const config = await services.getCollectionConfig(name);
     state.collectionVars = config.vars;

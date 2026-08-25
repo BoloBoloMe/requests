@@ -1,5 +1,6 @@
 // services/mock.ts: 内存 mock 适配层 (组件测试与 vite dev 演示用)
 // 数据形状与 D010 契约一致; execute/run 事件流可预置, 供 ISSUE-04/05 消费测试.
+import { ApiError } from "../api/http";
 import type {
   ApiServices,
   CollectionConfigData,
@@ -117,6 +118,16 @@ function findFolder(root: MockFolder, path: string): MockFolder {
   return node;
 }
 
+/** 名称校验与后端 _validate_name (store.py) 对齐: 拒绝路径分隔符/.. 及 . 开头;
+ *  错误形状对齐 http 层 (ApiError, status 422, 壳层 crud.py 由 ValueError 转 422). */
+const NAME_RE = /^[^/\\]{1,200}$/;
+
+function assertValidName(kind: string, name: string): void {
+  if (!NAME_RE.test(name) || name.includes("..") || name.startsWith(".")) {
+    throw new ApiError(422, `请求失败 422: 非法${kind}名: '${name}'`);
+  }
+}
+
 async function* toStream<T>(events: T[]): AsyncIterable<T> {
   for (const e of events) yield e;
 }
@@ -173,6 +184,7 @@ export function createMockServices(seed: MockSeed): ApiServices {
       };
     },
     async putCollectionConfig(collection: string, config: CollectionConfigData) {
+      assertValidName("集合", collection);
       // 隐式建集合: 与后端 write_collection (mkdir parents) 对齐, 不存在即建空树
       if (!seed.collections[collection]) {
         seed.collections[collection] = { tree: folder(collection) };

@@ -111,6 +111,11 @@ body {
   right: 0;
 }
 
+/* 当前集合勾选标记: 顶到行尾 (原内联 style 抽为 class) */
+.vb .collmenu .check {
+  margin-left: auto;
+}
+
 .vb .collmenu .collform {
   gap: 6px;
   cursor: default;

@@ -1,10 +1,12 @@
 // TS-014 (验收缺口): 集合菜单 — 集合名下拉切换 + 内联新建集合 + 空集合引导
 // 接缝: CollectionMenu/Sidebar 组件 + store.createCollection/selectCollection
+// 审核修复: 非法名用例走 mock 真校验 (对齐后端 _validate_name); 提交防重复 + Esc/取消.
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { createMockServices, presetBilling, type MockSeed } from "../../../services/mock";
 import { SERVICES_KEY } from "../../../services";
 import { createAppStore, STORE_KEY } from "../../../stores/app";
+import type { CollectionConfigData } from "../../../services/types";
 import CollectionMenu from "../CollectionMenu.vue";
 import Sidebar from "../Sidebar.vue";
 
@@ -69,25 +71,75 @@ describe("集合菜单", () => {
     expect(store.state.collections).toContain("orders");
   });
 
-  it("TC-106: 新建失败 (422) 在下拉内展示错误, 不静默", async () => {
-    const { wrapper, services } = await mountMenu(presetBilling());
-    vi.spyOn(services, "putCollectionConfig").mockRejectedValue(
-      new Error("422: 集合名非法"),
-    );
+  it("TC-106: 非法名 (mock 真校验, 对齐后端 422) 在下拉内展示错误, 不静默", async () => {
+    const { wrapper } = await mountMenu(presetBilling());
     await wrapper.find(".name").trigger("click");
     await wrapper.find("[data-new-collection]").trigger("click");
     const input = wrapper.find(".collform input");
-    await input.setValue("bad name");
+    // 真非法字符: 后端 _validate_name 拒绝路径分隔符; 不再用空格名 (真后端接受空格)
+    await input.setValue("foo/bar");
     await input.trigger("keydown", { key: "Enter" });
     await vi.waitFor(() => expect(wrapper.find(".collerror").exists()).toBe(true));
     expect(wrapper.find(".collerror").text()).toContain("422");
     // 失败不收起表单, 可修正重试
     expect(wrapper.find(".collform").exists()).toBe(true);
   });
+
+  it("TC-107: 提交中禁用创建按钮, 重复提交 (Enter/点击) 被忽略", async () => {
+    const { wrapper, services } = await mountMenu(presetBilling());
+    // 挂起 put: 提交保持进行中; 放行时走原实现 (种子真正建集合, 后续 select 不炸)
+    const orig = services.putCollectionConfig.bind(services);
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const putSpy = vi
+      .spyOn(services, "putCollectionConfig")
+      .mockImplementation(async (collection: string, config: CollectionConfigData) => {
+        await gate;
+        return orig(collection, config);
+      });
+    await wrapper.find(".name").trigger("click");
+    await wrapper.find("[data-new-collection]").trigger("click");
+    const input = wrapper.find(".collform input");
+    await input.setValue("orders");
+    await input.trigger("keydown", { key: "Enter" });
+    await vi.waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+    // 提交中: 创建按钮禁用
+    const submitBtn = wrapper.find("[data-create-submit]");
+    expect(submitBtn.attributes("disabled")).toBeDefined();
+    // 重复触发不产生第二次调用
+    await input.trigger("keydown", { key: "Enter" });
+    await submitBtn.trigger("click");
+    expect(putSpy).toHaveBeenCalledTimes(1);
+    // 放行后正常完成
+    release!();
+    await vi.waitFor(() => expect(wrapper.find(".collmenu").exists()).toBe(false));
+    expect(putSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("TC-108: Esc 或取消按钮关闭新建表单 (不误提交)", async () => {
+    const { wrapper, services } = await mountMenu(presetBilling());
+    const putSpy = vi.spyOn(services, "putCollectionConfig");
+    await wrapper.find(".name").trigger("click");
+    await wrapper.find("[data-new-collection]").trigger("click");
+    const input = wrapper.find(".collform input");
+    await input.setValue("orders");
+    // Esc 关闭
+    await input.trigger("keydown", { key: "Escape" });
+    expect(wrapper.find(".collform").exists()).toBe(false);
+    expect(putSpy).not.toHaveBeenCalled();
+    // 重新打开, 取消按钮关闭; 重开后输入框已清空
+    await wrapper.find("[data-new-collection]").trigger("click");
+    expect((wrapper.find(".collform input").element as HTMLInputElement).value).toBe("");
+    await wrapper.find("[data-create-cancel]").trigger("click");
+    expect(wrapper.find(".collform").exists()).toBe(false);
+    expect(putSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("空集合状态", () => {
-  it("TC-107: 无集合时侧栏显示引导, 新建请求按钮禁用不抛错", async () => {
+  it("TC-109: 无集合时侧栏显示引导, 新建请求按钮禁用不抛错", async () => {
     const services = createMockServices({ collections: {} });
     const store = createAppStore(services);
     await store.init();
