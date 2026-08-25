@@ -74,6 +74,14 @@
 - 影响: CLI 不接管 git (既定约束), SPA 同步按钮按 400/409 展示; M10 无 git 面.
 - 风险: 低. (d) 若 HITL 认为未提交改动也应停止, 改 precheck 一处即可.
 
+## D-AFK-012 — 08 协调补丁 2: GET /environments 列表端点 (M10 env list 契约)
+
+- 问题: M10 ISSUE-04 任务书列举 GET /environments 列表端点, 08 ISSUE-02 实际只交付 GET/PUT /environments/{name}; CLI env list 对真服务 404.
+- 决策: 08 侧补 GET /environments → {"environments":[name,...]} (扫 environments/*.yaml, 排除 *.secrets.yaml), 补测试; 入 M10 契约协调补丁序列 (前置: e02e4bf vars).
+- 理由: 与 M3 D010 资源 CRUD 惯例一致, 补丁最小; 不依赖它则 CLI env list 只能 404 兜底.
+- 影响: M10 env list 对真服务可用; candidates 兜底 (difflib + inventory) 也可用真清单.
+- 风险: 低.
+
 ## D-AFK-003 — Accept 头子串匹配留待 ISSUE-03 协商落地
 
 - 问题: security.py 用 `"text/event-stream" in accept` 子串匹配决定 SSE query token 副通道是否生效.

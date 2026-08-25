@@ -34,8 +34,13 @@
 
 - [MILESTONE-08](MILESTONE-08.md) — 后端核心实现 (AFK 执行段完成): 7 issues 全绿 (189 测试), launch 幂等拉起/安全五件套/Store CRUD/Resolve+Engine+send/Assert 解释器/Runner+JUnit/Sync git/dist 托管+token 注入; 完成定义全部达成. 执行裁定落盘 [UNAUTHORIZED_DECISIONS.md](../../api-client/UNAUTHORIZED_DECISIONS.md) D-AFK-001~010 (M11 复核). 提交: 34506c9~7e5b404
 
-- [MILESTONE-09](MILESTONE-09.md) — `task` — SPA 外壳实现 (05, 08 均已关闭, 解锁; 与 M10 互相独立可并行)
-- [MILESTONE-10](MILESTONE-10.md) — `task` — CLI 外壳实现 (04, 08 均已关闭, 解锁; 与 M09 互相独立可并行; 须对齐 08 的 API 形状, 见 EXECUTION 风险节)
+- [MILESTONE-09](MILESTONE-09.md) — `task` — SPA 外壳实现 (05, 08 均已关闭, 解锁; 与 M10 互相独立可并行)- [MILESTONE-10](MILESTONE-10.md) — CLI 外壳实现 (AFK 执行段完成): 4 issues 全绿 (CLI 55 测试), 命令面 send/run/资源组/schema/guide 完整, 退出码 0-4, 端到端冒烟全过 (含 --var 经 08 vars 补丁 e02e4bf 生效); 协调补丁: e02e4bf + de7654d (GET /environments). 提交: 5b0e7a9~29cecfb. 产物: [EXECUTION.md](../milestone-10/EXECUTION.md)
+
+- [MILESTONE-09](MILESTONE-09.md) — SPA 外壳实现 (AFK 执行段完成): 5 issues 全绿 (vitest 68), Vite+Vue3+TS 工程 + dist 入库, 真实后端集成冒烟过 (token 注入/SSE 端到端/run 事件流). 提交: 8a82464~be8e1b0. 产物: [EXECUTION.md](../milestone-09/EXECUTION.md)
+
+## 前沿
+
+- [MILESTONE-11](MILESTONE-11.md) — `task`(HITL) — 成品验收 (09, 10 均已关闭, 解锁; 需用户在场: uv run 即起 + SPA 真实工作流 + agent 真实调 CLI + git 同步跑通)
 
 ## 未决迷雾
 
@@ -57,7 +62,7 @@
 06 (已关闭)
 12 (已关闭; 为 08/09/10 提供测试靶子)
 03, 06 ──► 08 (已关闭)
-05, 08 ──► 09 (均已关闭, 09 解锁)
-04, 08 ──► 10 (均已关闭, 10 解锁)
-09, 10 ──► 11 ──► 目的地
+05, 08 ──► 09 (已关闭)
+04, 08 ──► 10 (已关闭)
+09, 10 ──► 11 (均关闭, 11 解锁) ──► 目的地
 ```
