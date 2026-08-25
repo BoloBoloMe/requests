@@ -14,7 +14,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger("api_client.static")
 
-TOKEN_PLACEHOLDER = "__APIC_TOKEN__"
+# 占位符约定: JS 属性名 __APIC_TOKEN__ 固定, 只有值占位符参与替换 (审核返工: 防属性名被全局替换成含 - 的非法 JS)
+TOKEN_PLACEHOLDER = "__APIC_TOKEN_VALUE__"
 
 
 def default_spa_dir() -> Path:
@@ -62,7 +63,9 @@ def mount_static(app: FastAPI, token: str, spa_dir: Path) -> bool:
         logger.warning("SPA dist 不存在 (%s), 跳过静态托管", dist_dir)
         return False
 
+    # / 与 /index.html 同语义: 均返回注入后页面 + no-store (直接访问 index.html 也需注入)
     @app.get("/", include_in_schema=False)
+    @app.get("/index.html", include_in_schema=False)
     async def index() -> HTMLResponse:
         # 内存内占位符替换 serve (D004-4): token 只存在于内存, 不落任何磁盘文件
         html = index_path.read_text(encoding="utf-8").replace(TOKEN_PLACEHOLDER, token)

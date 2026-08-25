@@ -26,11 +26,14 @@ def client() -> TestClient:
 
 
 def test_index_injects_current_token_no_placeholder(client):
-    """TC-001: 首页 HTML 含当前 token 值且不含占位符."""
+    """TC-001: 首页 HTML 固定属性名注入当前 token 值, 值占位符不残留.
+
+    TOKEN 含 `-`: 属性名若参与替换会产生非法 JS (审核返工, ISSUE-07).
+    """
     r = client.get("/", headers=HOST)
     assert r.status_code == 200
-    assert TOKEN in r.text
-    assert "__APIC_TOKEN__" not in r.text
+    assert f'window.__APIC_TOKEN__ = "{TOKEN}";' in r.text
+    assert "__APIC_TOKEN_VALUE__" not in r.text
 
 
 def test_index_cache_control_no_store(client):
@@ -52,6 +55,15 @@ def test_index_injection_uses_current_token_per_app():
     r = other.get("/", headers=HOST)
     assert other_token in r.text
     assert TOKEN not in r.text
+
+
+def test_index_html_direct_access_injects_token(client):
+    """TC-009: GET /index.html 直接访问同 / 语义: 注入 token + no-store."""
+    r = client.get("/index.html", headers=HOST)
+    assert r.status_code == 200
+    assert f'window.__APIC_TOKEN__ = "{TOKEN}";' in r.text
+    assert "__APIC_TOKEN_VALUE__" not in r.text
+    assert r.headers["cache-control"] == "no-store"
 
 
 # --- TS-002: 时间戳漂移警告 (D003/F005) ---
@@ -94,6 +106,20 @@ def test_fresh_dist_no_warning(tmp_path, caplog):
 
     spa = tmp_path / "spa"
     src_dir, dist_dir = _make_tree(spa, src_ts=1_000_000_000, dist_ts=2_000_000_000)
+
+    assert check_dist_staleness(src_dir, dist_dir) is False
+
+    with caplog.at_level(logging.WARNING, logger="api_client.static"):
+        create_app(TOKEN, spa_dir=spa)
+    assert "产物漂移" not in "\n".join(r.getMessage() for r in caplog.records)
+
+
+def test_equal_mtime_no_warning(tmp_path, caplog):
+    """TC-010: src_mtime == dist_mtime (同刻构建) → 返回 False 且无警告."""
+    import logging
+
+    spa = tmp_path / "spa"
+    src_dir, dist_dir = _make_tree(spa, src_ts=1_500_000_000, dist_ts=1_500_000_000)
 
     assert check_dist_staleness(src_dir, dist_dir) is False
 
