@@ -106,7 +106,8 @@ body {
   font-size: 10px;
 }
 
-.vb .collmenu {
+/* 特异性须高于下方 .vb .envmenu (同文件后出者胜), 否则 right:74px 压窄下拉 */
+.vb .envmenu.collmenu {
   top: 24px;
   right: 0;
 }
