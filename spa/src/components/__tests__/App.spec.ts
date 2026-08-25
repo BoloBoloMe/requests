@@ -3,10 +3,19 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import App from "../../App.vue";
+import { createMockServices, presetBilling } from "../../services/mock";
+import { SERVICES_KEY } from "../../services";
+import { createAppStore, STORE_KEY } from "../../stores/app";
 
 describe("App 骨架", () => {
   it("TC-003: 挂载后同时存在侧栏与请求/响应占位容器", () => {
-    const wrapper = mount(App);
+    const services = createMockServices(presetBilling());
+    const store = createAppStore(services);
+    const wrapper = mount(App, {
+      global: {
+        provide: { [SERVICES_KEY as symbol]: services, [STORE_KEY as symbol]: store },
+      },
+    });
     // 左侧栏占位 (变体 B .side) 与右主区上下分区 (.reqpane/.resp)
     expect(wrapper.find(".side").exists()).toBe(true);
     expect(wrapper.find(".main").exists()).toBe(true);
