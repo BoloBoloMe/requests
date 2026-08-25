@@ -32,7 +32,10 @@
 
 ## 前沿
 
-- [MILESTONE-08](MILESTONE-08.md) — `task` — 后端核心实现 (03, 06 均已关闭, 解锁)
+- [MILESTONE-08](MILESTONE-08.md) — 后端核心实现 (AFK 执行段完成): 7 issues 全绿 (189 测试), launch 幂等拉起/安全五件套/Store CRUD/Resolve+Engine+send/Assert 解释器/Runner+JUnit/Sync git/dist 托管+token 注入; 完成定义全部达成. 执行裁定落盘 [UNAUTHORIZED_DECISIONS.md](../../api-client/UNAUTHORIZED_DECISIONS.md) D-AFK-001~010 (M11 复核). 提交: 34506c9~7e5b404
+
+- [MILESTONE-09](MILESTONE-09.md) — `task` — SPA 外壳实现 (05, 08 均已关闭, 解锁; 与 M10 互相独立可并行)
+- [MILESTONE-10](MILESTONE-10.md) — `task` — CLI 外壳实现 (04, 08 均已关闭, 解锁; 与 M09 互相独立可并行; 须对齐 08 的 API 形状, 见 EXECUTION 风险节)
 
 ## 未决迷雾
 
@@ -53,8 +56,8 @@
 05 (已关闭)
 06 (已关闭)
 12 (已关闭; 为 08/09/10 提供测试靶子)
-03, 06 ──► 08 (阻塞者均已关闭, 08 已解锁)
-05, 08 ──► 09 (05 已关闭, 仍阻塞于 08)
-04, 08 ──► 10 (04 已关闭, 仍阻塞于 08)
+03, 06 ──► 08 (已关闭)
+05, 08 ──► 09 (均已关闭, 09 解锁)
+04, 08 ──► 10 (均已关闭, 10 解锁)
 09, 10 ──► 11 ──► 目的地
 ```
