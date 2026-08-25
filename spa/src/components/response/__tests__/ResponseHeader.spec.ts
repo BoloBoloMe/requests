@@ -58,4 +58,24 @@ describe("ResponseHeader", () => {
     expect(wrapper.find(".status").classes()).toContain("err");
     expect(wrapper.text()).toContain("TIMEOUT");
   });
+
+  it("断言失败显示首个失败明细 (target op expect → actual), 全过则不显示", () => {
+    const bad = mount(ResponseHeader, {
+      props: {
+        done: done("assert_failed", [
+          { assertion: { target: "status", op: "eq", expect: 500 }, ok: false, actual: 200, message: "" },
+        ]),
+        bodyBytes: 100,
+      },
+    });
+    expect(bad.find(".failnote").text()).toContain("status eq 500");
+    expect(bad.find(".failnote").text()).toContain("200");
+    const ok = mount(ResponseHeader, {
+      props: {
+        done: done(200, [{ assertion: { target: "status", op: "eq", expect: 200 }, ok: true, actual: 200, message: "" }]),
+        bodyBytes: 100,
+      },
+    });
+    expect(ok.find(".failnote").exists()).toBe(false);
+  });
 });

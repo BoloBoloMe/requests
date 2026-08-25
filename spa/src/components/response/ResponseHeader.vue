@@ -53,6 +53,17 @@ const passed = computed(() => props.done.assertions.filter((a) => a.ok).length);
 const assertClass = computed(() =>
   props.done.assertions.some((a) => !a.ok) ? "bad" : "ok",
 );
+
+/** 首个失败断言明细 (RES-02: 单次发送也要可见失败原因, 不只 run 路径) */
+const firstFailure = computed(() => props.done.assertions.find((a) => !a.ok) ?? null);
+const failureText = computed(() => {
+  const f = firstFailure.value;
+  if (!f) return "";
+  const { target, op } = f.assertion;
+  const expect = "expect" in f.assertion ? JSON.stringify(f.assertion.expect) : "";
+  const actual = "actual" in f && f.actual !== undefined ? JSON.stringify(f.actual) : "?";
+  return f.message || `${target} ${op} ${expect} → actual ${actual}`;
+});
 </script>
 
 <template>
@@ -68,5 +79,6 @@ const assertClass = computed(() =>
     <span v-if="done.assertions.length > 0" class="asserts" :class="assertClass"
       >断言 {{ passed }}/{{ done.assertions.length }} {{ assertClass === "ok" ? "✓" : "✗" }}</span
     >
+    <span v-if="firstFailure" class="failnote" :title="failureText">{{ failureText }}</span>
   </div>
 </template>
