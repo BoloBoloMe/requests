@@ -1,6 +1,7 @@
 """Resolve: 请求条目 + 环境 -> 可执行请求 (M3 D008).
 
-藏: 变量优先级 (M2 D012: 集合 vars < 环境 vars < 环境 secrets), 集合级默认继承
+藏: 变量优先级 (M2 D012: 集合 vars < 环境 vars < 环境 secrets; D-AFK-011 追加:
+调用方一次性 vars 覆盖层最高), 集合级默认继承
 (M2 D010: headers 按名合并请求覆盖同名, auth 整体覆盖), 动态变量白名单
 (M1 D010: {{$now}}/{{$uuid}}). 插值在 url/params/headers/body/auth 全字段生效
 (M1 D009); 解析后残留 {{var}} 硬失败 UNRESOLVED_VARIABLES (M4 D006).
@@ -54,23 +55,27 @@ def build_request(
     env: Environment | None = None,
     config: CollectionConfig | None = None,
     *,
+    vars: dict[str, str] | None = None,
     now_fn: Callable[[], datetime] | None = None,
     uuid_fn: Callable[[], str] | None = None,
 ) -> ResolvedRequest:
     """纯函数: 条目 + 环境 (+集合配置) -> 可执行请求.
 
+    vars 为调用方一次性覆盖层 (D-AFK-011): 优先级最高, 只影响本次解析, 不落盘.
     now_fn/uuid_fn 注入便于测试; 缺省为 UTC 当前时间 / UUIDv4 (M1 D010).
     """
     now_fn = now_fn or _default_now_fn
     uuid_fn = uuid_fn or _default_uuid_fn
 
-    # 变量优先级 (M2 D012): 集合 vars < 环境 vars < 环境 secrets
+    # 变量优先级 (M2 D012 + D-AFK-011): 集合 vars < 环境 vars < 环境 secrets < 本次 vars
     variables: dict[str, str] = {}
     if config is not None:
         variables.update(config.vars)
     if env is not None:
         variables.update(env.vars)
         variables.update(env.secrets)
+    if vars is not None:
+        variables.update(vars)
 
     missing: set[str] = set()
 

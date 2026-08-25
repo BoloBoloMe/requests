@@ -333,6 +333,65 @@ def test_run_default_uses_active_environment(tmp_path, testbed_url):
     assert json.loads(chunk["data"])["headers"]["x-token"] == "dev-secret"
 
 
+# --- D-AFK-011: 请求体 {env?, vars?} (M10 契约): vars 覆盖层最高优先, body env 优先于 query ---
+
+
+def test_run_vars_override_env(tmp_path, testbed_url):
+    """请求体 vars 覆盖环境同名字段 (D-AFK-011): 实际发送 header 取覆盖值.
+    同时覆盖 run_collection 直连接缝的 vars 透传."""
+    _write_env_collection(tmp_path, testbed_url)
+    Store(tmp_path).set_active_environment("dev")
+
+    # 直连接缝: run_collection(vars=...)
+    events = _collect(
+        run_collection(Store(tmp_path), Engine(Store(tmp_path)), "demo", vars={"token": "once-direct"})
+    )
+    chunk = next(e for e in events if e["type"] == "chunk")
+    assert json.loads(chunk["data"])["headers"]["x-token"] == "once-direct"
+
+    # HTTP 接缝: 请求体 vars
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/collections/demo/run?env=dev",
+        json={"vars": {"token": "once-token"}},
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+    chunk = next(e for e in events if e["type"] == "chunk")
+    assert json.loads(chunk["data"])["headers"]["x-token"] == "once-token"
+
+
+def test_run_body_env_overrides_query(tmp_path, testbed_url):
+    """请求体 env 优先于 ?env= query (兼容保留 query): body prod 胜 query dev."""
+    _write_env_collection(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/collections/demo/run?env=dev",
+        json={"env": "prod"},
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+    meta = next(e for e in events if e["type"] == "meta")
+    assert meta["env"] == "prod"
+    chunk = next(e for e in events if e["type"] == "chunk")
+    assert json.loads(chunk["data"])["headers"]["x-token"] == "prod-secret"
+
+
+def test_run_vars_invalid_shape_422(tmp_path, testbed_url):
+    """vars 形状非法 (非 dict / 值非 str) -> 422, 不产生事件流."""
+    _write_env_collection(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    for bad_vars in (["not-a-dict"], {"token": 1}):
+        response = client.post(
+            "/collections/demo/run",
+            json={"vars": bad_vars},
+            headers=_auth(),
+        )
+        assert response.status_code == 422, bad_vars
+
+
 # --- 返工 5: 空集合 run 钉死 (200 + 空 summary/testsuite, 不 404) ---
 
 

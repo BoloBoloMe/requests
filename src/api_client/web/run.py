@@ -6,6 +6,8 @@
 """
 
 from collections.abc import AsyncIterator
+import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -14,7 +16,7 @@ from ..engine import Engine
 from ..resolve import UnresolvedVariablesError
 from ..runner import junit_xml, run_collection
 from ..store import NotFoundError, Store
-from .execute import _encode_ndjson, _encode_sse
+from .execute import _encode_ndjson, _encode_sse, _parse_vars
 
 
 def create_run_router(store: Store, require_token) -> APIRouter:
@@ -23,9 +25,26 @@ def create_run_router(store: Store, require_token) -> APIRouter:
 
     @router.post("/collections/{collection}/run")
     async def run(collection: str, request: Request, env: str | None = None) -> StreamingResponse:
+        # 请求体可选 {env?, vars?} (M10 契约, D-AFK-011); body 的 env 优先于 ?env= query
+        payload: dict[str, Any] = {}
+        raw = await request.body()
+        if raw:
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=422, detail="请求体应为 JSON") from None
+            if not isinstance(payload, dict):
+                raise HTTPException(status_code=422, detail="请求体应为 JSON 对象")
+        body_env = payload.get("env")
+        if body_env is not None:
+            if not isinstance(body_env, str):
+                raise HTTPException(status_code=422, detail="env 应为字符串")
+            env = body_env
+        vars_override = _parse_vars(payload["vars"]) if "vars" in payload else None
+
         # 急切读: 集合/环境不存在 404, 未解析变量 422 (事件流尚未开始, M4 D006)
         try:
-            batch = run_collection(store, engine, collection, env_name=env)
+            batch = run_collection(store, engine, collection, env_name=env, vars=vars_override)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
         except UnresolvedVariablesError as exc:

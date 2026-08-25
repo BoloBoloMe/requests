@@ -130,19 +130,22 @@ def run_collection(
     engine: Engine,
     collection: str,
     env_name: str | None = None,
+    *,
+    vars: dict[str, str] | None = None,
 ) -> Run:
     """急切完成 集合/环境/条目读取与变量解析后返回 Run 句柄.
 
     NotFoundError (集合/环境不存在) 与 UnresolvedVariablesError 在调用点同步抛出,
     事件流尚未开始 (M4 D006: 未解析变量硬失败, 不产生事件流); 壳层归 404/422.
     env_name 缺省读激活环境 (M2 D007).
+    vars 为调用方一次性覆盖层 (D-AFK-011), 透传 build_request, 优先级最高.
     """
     config = store.read_collection(collection)
     if env_name is None:
         env_name = store.get_active_environment()
     env = store.read_environment(env_name) if env_name is not None else None
     prepared = [
-        (entry.slug, entry.item, build_request(entry.item, env, config))
+        (entry.slug, entry.item, build_request(entry.item, env, config, vars=vars))
         for entry in store.list_items(collection)
     ]
     return Run(engine, collection, env_name, prepared)

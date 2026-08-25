@@ -189,3 +189,59 @@ def test_execute_client_disconnect_does_not_cancel(tmp_path, testbed_url):
             except ProcessLookupError:
                 pass
             proc.wait()
+
+
+# --- D-AFK-011: 请求体可选 vars 覆盖层 (M10 契约) ---
+
+
+def _write_vars_item(data_dir, testbed_url) -> None:
+    """单条目: url 查询参数插值 {{token}}, 环境供值, vars 可覆盖."""
+    store = Store(data_dir)
+    store.write_item(
+        "demo",
+        "echo",
+        Item(name="echo", method="GET", url=f"{testbed_url}/echo?token={{{{token}}}}"),
+    )
+    store.write_environment("dev", {"token": "env-token"})
+    store.set_active_environment("dev")
+
+
+def test_execute_vars_override_env(tmp_path, testbed_url):
+    """请求体 vars 覆盖环境同名字段 (D-AFK-011): meta.resolved_url 取覆盖值."""
+    _write_vars_item(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/execute",
+        json={"collection": "demo", "item": "echo", "vars": {"token": "once-token"}},
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    meta = _collect_ndjson(response)[0]
+    assert meta["resolved_url"] == f"{testbed_url}/echo?token=once-token"
+
+
+def test_execute_without_vars_uses_env(tmp_path, testbed_url):
+    """不传 vars 时行为不变: 变量取环境值."""
+    _write_vars_item(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/execute",
+        json={"collection": "demo", "item": "echo"},
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    meta = _collect_ndjson(response)[0]
+    assert meta["resolved_url"] == f"{testbed_url}/echo?token=env-token"
+
+
+def test_execute_vars_invalid_shape_422(tmp_path, testbed_url):
+    """vars 形状非法 (非 dict / 值非 str) -> 422, 不产生事件流."""
+    _write_vars_item(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    for bad_vars in (["not-a-dict"], {"token": 1}, "oops"):
+        response = client.post(
+            "/execute",
+            json={"collection": "demo", "item": "echo", "vars": bad_vars},
+            headers=_auth(),
+        )
+        assert response.status_code == 422, bad_vars

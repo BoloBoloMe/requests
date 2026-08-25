@@ -17,6 +17,15 @@ from ..resolve import UnresolvedVariablesError, build_request
 from ..store import NotFoundError, Store
 
 
+def _parse_vars(value: Any) -> dict[str, str]:
+    """vars 覆盖层形状校验 (D-AFK-011): 非 dict 或值非 str -> 422."""
+    if not isinstance(value, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+    ):
+        raise HTTPException(status_code=422, detail="vars 应为 {str: str} 字典")
+    return value
+
+
 def _encode_sse(event: dict) -> str:
     return f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
@@ -47,6 +56,9 @@ def create_execute_router(store: Store, require_token) -> APIRouter:
             env_name = store.get_active_environment()
         env_name = None if env_name is None else str(env_name)
 
+        # vars 覆盖层可选 (D-AFK-011): 只影响本次执行, 不落盘
+        vars_override = _parse_vars(payload["vars"]) if "vars" in payload else None
+
         try:
             item = store.read_item(collection, slug, folder)
             config = store.read_collection(collection)
@@ -54,7 +66,7 @@ def create_execute_router(store: Store, require_token) -> APIRouter:
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from None
         try:
-            resolved = build_request(item, env, config)
+            resolved = build_request(item, env, config, vars=vars_override)
         except UnresolvedVariablesError as exc:
             raise HTTPException(
                 status_code=422,

@@ -40,7 +40,6 @@ def _header(req, key: str) -> str | None:
 
 # --- TC-001: 变量优先级 集合 vars < 环境 vars < 环境 secrets (M2 D012) ---
 
-
 def test_resolve_secrets_override_env():
     """同名变量: secrets 覆盖环境 vars, 环境 vars 覆盖集合 vars."""
     item = Item(
@@ -58,6 +57,28 @@ def test_resolve_secrets_override_env():
     req = build_request(item, env, config)
     assert req.url == "http://env-host/p"  # 环境 vars 覆盖集合 vars
     assert _header(req, "X-Token") == "secret-token"  # secrets 最高优先级
+
+
+# --- D-AFK-011: 调用方一次性 vars 覆盖层, 优先级最高 (集合 < 环境 < secrets < 本次 vars) ---
+
+
+def test_resolve_vars_override_highest_priority():
+    """vars 覆盖层压过环境 secrets 同名字段; 未同名的集合/环境变量不受影响."""
+    item = Item(
+        name="x",
+        method="GET",
+        url="http://{{host}}/p",
+        headers=[KV("X-Token", "{{token}}")],
+    )
+    config = CollectionConfig(vars={"host": "collection-host", "token": "collection-token"})
+    env = Environment(
+        name="dev",
+        vars={"host": "env-host", "token": "env-token"},
+        secrets={"token": "secret-token"},
+    )
+    req = build_request(item, env, config, vars={"token": "once-token"})
+    assert req.url == "http://env-host/p"  # 未覆盖字段保持原优先级链
+    assert _header(req, "X-Token") == "once-token"  # 本次 vars 压过 secrets
 
 
 # --- TC-002: 集合级默认继承 (M2 D010): headers 按名合并请求覆盖同名, auth 整体覆盖 ---
