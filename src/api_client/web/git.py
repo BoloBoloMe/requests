@@ -24,6 +24,12 @@ def create_git_router(data_dir: Path, require_token) -> APIRouter:
         remote_url = payload.remote_url.strip()
         if not remote_url:
             raise HTTPException(status_code=400, detail="remote_url 不能为空")
+        # 基础合法性: git remote add 接受任意字符串, 含空白必非法
+        # (URL/scp 语法与本地路径均不允许未转义空白)
+        if any(c.isspace() for c in remote_url):
+            raise HTTPException(
+                status_code=400, detail="remote_url 含空白字符, 非法"
+            )
         try:
             bind(data_dir, remote_url)
         except SyncError as exc:

@@ -32,13 +32,18 @@ class SyncError(Exception):
 
 
 def _git(data_dir: Path, *args: str) -> str:
-    """跑一条 git 命令; 非零退出即 SyncError, stdout+stderr 原样透传 (D009)."""
+    """跑一条 git 命令; 非零退出即 SyncError, stdout+stderr 原样透传 (D009).
+
+    stdin=DEVNULL: 隔离输入通道, credential/SSH host-key 等交互提示
+    立即失败而非悬挂服务 (本模块所有 git 子进程统一隔离).
+    """
     proc = subprocess.run(
         ["git", *_IDENTITY, *args],
         cwd=data_dir,
         env=_GIT_ENV,
         text=True,
         capture_output=True,
+        stdin=subprocess.DEVNULL,
     )
     if proc.returncode != 0:
         raise SyncError(
@@ -56,6 +61,7 @@ def _has_head(data_dir: Path) -> bool:
             cwd=data_dir,
             env=_GIT_ENV,
             capture_output=True,
+            stdin=subprocess.DEVNULL,
         ).returncode
         == 0
     )
@@ -134,18 +140,22 @@ def sync(data_dir: Path | str) -> None:
         cwd=data_dir,
         env=_GIT_ENV,
         capture_output=True,
+        stdin=subprocess.DEVNULL,
     )
     if staged.returncode != 0:
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         _git(data_dir, "commit", "-m", f"sync: {stamp}")
 
     branch = _git(data_dir, "symbolic-ref", "--short", "HEAD").strip()
+    # 注: ls-remote 失败 (网络/鉴权) 与远端无分支在此不作区分 (已裁决 defer):
+    # 统一按"远端无分支"处理跳过 pull; 真实远端网络失败随后由 push 拒绝暴露, 不静默.
     remote_has_branch = (
         subprocess.run(
             ["git", "ls-remote", "--exit-code", "origin", branch],
             cwd=data_dir,
             env=_GIT_ENV,
             capture_output=True,
+            stdin=subprocess.DEVNULL,
         ).returncode
         == 0
     )

@@ -167,6 +167,20 @@ def test_sync_dirty_state_stops(diverged):
     assert any(line.startswith("UU") for line in status.splitlines())
 
 
+# --- 远端不可达: sync 快速失败而非悬挂 (stdin 隔离后交互提示立即失败) ---
+
+
+def test_sync_unreachable_remote_fails_fast(repo):
+    import time
+
+    # 127.0.0.1:1 连接即拒, 任何挂起都会超出门槛
+    bind(repo, "https://127.0.0.1:1/nope.git")
+    start = time.monotonic()
+    with pytest.raises(SyncError):
+        sync(repo)
+    assert time.monotonic() - start < 60
+
+
 # --- TS-003 TC-007/TC-008: RPC 壳薄测 (M3 D010, D014-3) ---
 
 TOKEN = "test-token"
@@ -195,6 +209,13 @@ def test_git_bind_and_sync_rpc(client, remote):
 
     # 非法 URL (空/纯空白) → 明确错误, 不得 500
     r = client.post("/git/bind", json={"remote_url": "  "}, headers={**HOST, **AUTH})
+    assert r.status_code == 400
+    assert "remote_url" in r.json()["detail"]
+
+    # 非法 URL (含空白, git remote add 本身不拒) → 前置校验 400
+    r = client.post(
+        "/git/bind", json={"remote_url": "not a url"}, headers={**HOST, **AUTH}
+    )
     assert r.status_code == 400
     assert "remote_url" in r.json()["detail"]
 
