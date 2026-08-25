@@ -18,6 +18,8 @@ from typing import Any
 
 import httpx
 
+from .assertions import Response as AssertionResponse
+from .assertions import evaluate
 from .resolve import ResolvedRequest
 from .store import Store
 
@@ -65,8 +67,10 @@ class Engine:
         collection: str | None = None,
         slug: str | None = None,
         folder: str = "",
+        assertions: list[dict] | None = None,
     ) -> Execution:
-        """启动执行: 立即返回, 事件经 queue 出流; 调用方放弃消费不影响执行完成."""
+        """启动执行: 立即返回, 事件经 queue 出流; 调用方放弃消费不影响执行完成.
+        assertions 为条目断言定义 (M6 决策 1), 求值结果进 done.assertions (M4 D003)."""
         queue: asyncio.Queue = asyncio.Queue()
         task = asyncio.create_task(
             self._run(
@@ -77,6 +81,7 @@ class Engine:
                 collection=collection,
                 slug=slug,
                 folder=folder,
+                assertions=assertions or [],
             )
         )
         self._live.add(task)
@@ -221,18 +226,26 @@ class Engine:
         collection: str | None,
         slug: str | None,
         folder: str,
+        assertions: list[dict],
     ) -> None:
         start = time.monotonic()
 
-        def done_event(status: int | None, error: dict | None = None) -> dict:
+        def done_event(
+            status: int | None,
+            error: dict | None = None,
+            assertion_results: list[dict] | None = None,
+        ) -> dict:
             event = {
                 "type": "done",
                 "timestamp": _now_iso(),
                 "item": item_ref,
                 "status": status,
                 "duration_ms": int((time.monotonic() - start) * 1000),
-                "assertions": [],  # 断言求值属 ISSUE-04
+                "assertions": assertion_results or [],  # M4 D003: 每条 定义/ok/actual/message
             }
+            # 断言失败反映在 done.status (不中断执行; 供 ISSUE-05 runner 统计对齐)
+            if assertion_results and not all(r["ok"] for r in assertion_results):
+                event["status"] = "assert_failed"
             if error is not None:
                 event["error"] = error  # 传输失败可观察 (超时/大小超限), 仅失败时出现
             return event
@@ -345,8 +358,26 @@ class Engine:
                     error=error,
                     duration_ms=int((time.monotonic() - start) * 1000),
                 )
+            # 断言求值 (M6 决策 1): 拿到响应且传输未失败才求值; 失败不中断
+            assertion_results: list[dict] | None = None
+            if assertions and status is not None and error is None:
+                snapshot = AssertionResponse(
+                    status=status,
+                    headers={h["key"]: h["value"] for h in response_headers},
+                    body_text=body_text or "",  # 二进制体无文本: 按非 JSON 降级 (决策 3)
+                    elapsed_ms=(time.monotonic() - start) * 1000,
+                )
+                assertion_results = [
+                    {
+                        "assertion": r.assertion,
+                        "ok": r.ok,
+                        "actual": r.actual,
+                        "message": r.message,
+                    }
+                    for r in evaluate(snapshot, assertions)
+                ]
             # 收尾必达 (防挂): 任何路径都发 done + 哨兵, 消费者 queue.get() 不会永久阻塞
-            await queue.put(done_event(status, error))
+            await queue.put(done_event(status, error, assertion_results))
             await queue.put(None)  # 哨兵
     # --- 历史写入口 (M2 D011: 发送即记录, 副作用经 Store; 不脱敏 M5 决策 5) ---
 

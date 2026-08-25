@@ -69,9 +69,11 @@ def create_execute_router(store: Store, require_token) -> APIRouter:
             collection=collection,
             slug=slug,
             folder=folder,
+            assertions=item.assertions,  # 断言定义随条目 (M6 决策 1), 结果进 done.assertions
         )
 
-        # Accept 协商 (M3 D007): 明确要求 SSE 才走 SSE, 其余一律 NDJSON
+        # Accept 协商 (M3 D007): 明确要求 SSE 才走 SSE, 其余一律 NDJSON.
+        # 简化语义钉死: 含 text/event-stream 子串即 SSE, 否则 NDJSON, 不解析 q 值权重.
         accept = request.headers.get("accept", "")
         if "text/event-stream" in accept:
             encode, media_type = _encode_sse, "text/event-stream"
@@ -84,6 +86,8 @@ def create_execute_router(store: Store, require_token) -> APIRouter:
                 if event is None:  # 哨兵: 执行收尾
                     break
                 yield encode(event)
+            # 排干后取回 task 结果: 传播意外异常, 消除 task 异常未 retrieve 噪音
+            await execution.task
             # 客户端中途断开时本生成器被取消, 只停消费; execution.task 由
             # Engine._live 强引用持有, 跑到底并落历史 (M3 D006 断连不取消)
 

@@ -59,6 +59,15 @@ class _SubsetDumper(yaml.SafeDumper):
         return True
 
 
+def _represent_str(dumper: yaml.SafeDumper, data: str) -> yaml.ScalarNode:
+    """多行字符串用 | 块标量 (M6 决策 2: python 断言代码人和 AI 都可写)."""
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_SubsetDumper.add_representer(str, _represent_str)
+
+
 def _dump_yaml(payload: dict) -> str:
     return yaml.dump(
         payload,
