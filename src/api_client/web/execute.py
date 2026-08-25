@@ -107,6 +107,21 @@ def create_execute_router(store: Store, require_token) -> APIRouter:
 
     # --- 历史只读端点 (M2 D011) ---
 
+    @router.get("/history")
+    async def recent_history(limit: int = 50) -> dict:
+        """跨集合最近历史 (M10 协调: CLI history list); 声明先于 /history/{collection}/{slug}."""
+        return {"entries": store.list_recent_history(limit)}
+
+    @router.get("/history/entry/{entry_id:path}")
+    async def show_history_entry(entry_id: str) -> dict:
+        """按 id 读单条历史全文 (CLI history show); entry 前缀避开与 {collection}/{slug} 路由歧义."""
+        try:
+            return store.read_history_entry(entry_id)
+        except NotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+
     @router.get("/history/{collection}/{slug}")
     async def list_history(collection: str, slug: str, folder: str = "") -> dict:
         try:

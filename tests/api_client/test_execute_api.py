@@ -245,3 +245,44 @@ def test_execute_vars_invalid_shape_422(tmp_path, testbed_url):
             headers=_auth(),
         )
         assert response.status_code == 422, bad_vars
+
+
+# --- 全局历史索引 (M10 协调: CLI history list/show 对真服务) ---
+
+
+def test_history_recent_and_entry_roundtrip(tmp_path, testbed_url):
+    """发送落历史 -> GET /history 最近优先条目 (id/item_ref/env/status/started_at/duration_ms/断言计数)
+    -> GET /history/entry/{id} 取回全文 (M10 协调点补洞: 08 未交付全局历史端点)."""
+    _write_echo_item(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/execute",
+        json={"collection": "demo", "item": "echo"},
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+
+    listing = client.get("/history", headers=_auth())
+    assert listing.status_code == 200
+    entries = listing.json()["entries"]
+    assert len(entries) == 1
+    entry = entries[0]
+    for field in ("id", "item_ref", "env", "status", "started_at", "duration_ms",
+                  "assertions_passed", "assertions_failed"):
+        assert field in entry, field
+    assert entry["item_ref"] == "demo/echo"
+    assert entry["status"] == 200
+
+    detail = client.get(f"/history/entry/{entry['id']}", headers=_auth())
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["id"] == entry["id"]
+    assert body["request"]["method"] == "GET"
+    assert body["response"]["status"] == 200
+
+
+def test_history_entry_not_found_404(tmp_path):
+    """不存在 id -> 404 (CLI exit 4 映射); 路径穿越段 -> 422."""
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    assert client.get("/history/entry/demo/echo/29990101T0000000000000000", headers=_auth()).status_code == 404
+    assert client.get("/history/entry/demo/..%2F..%2Fetc", headers=_auth()).status_code in (404, 422)

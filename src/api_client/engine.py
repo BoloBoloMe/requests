@@ -341,27 +341,8 @@ class Engine:
             error = {"code": "UNEXPECTED_ERROR", "message": f"{type(exc).__name__}: {exc}"}
             raise
         finally:
-            # SSE 未关闭不落 (M2 D011): 流中途出错 (超时/断线) 不聚合落盘
-            if sent and not (is_sse and error is not None):
-                self._write_history(
-                    request,
-                    eff_headers,
-                    eff_params,
-                    item_ref=item_ref,
-                    collection=collection,
-                    slug=slug,
-                    folder=folder,
-                    status=status,
-                    response_headers=response_headers,
-                    content_type=content_type,
-                    is_sse=is_sse,
-                    sse_payloads=sse_payloads,
-                    body_text=body_text,
-                    body_size=body_size,
-                    error=error,
-                    duration_ms=int((time.monotonic() - start) * 1000),
-                )
-            # 断言求值 (M6 决策 1): 拿到响应且传输未失败才求值; 失败不中断
+            # 断言求值 (M6 决策 1): 拿到响应且传输未失败才求值; 失败不中断.
+            # 先于落历史: 历史记录捎带断言计数 (M10 协调: GET /history 条目形状)
             assertion_results: list[dict] | None = None
             if assertions and status is not None and error is None:
                 snapshot = AssertionResponse(
@@ -379,6 +360,28 @@ class Engine:
                     }
                     for r in evaluate(snapshot, assertions)
                 ]
+            # SSE 未关闭不落 (M2 D011): 流中途出错 (超时/断线) 不聚合落盘
+            if sent and not (is_sse and error is not None):
+                self._write_history(
+                    request,
+                    eff_headers,
+                    eff_params,
+                    item_ref=item_ref,
+                    env=env,
+                    collection=collection,
+                    slug=slug,
+                    folder=folder,
+                    status=status,
+                    response_headers=response_headers,
+                    content_type=content_type,
+                    is_sse=is_sse,
+                    sse_payloads=sse_payloads,
+                    body_text=body_text,
+                    body_size=body_size,
+                    error=error,
+                    duration_ms=int((time.monotonic() - start) * 1000),
+                    assertion_results=assertion_results,
+                )
             # 收尾必达 (防挂): 任何路径都发 done + 哨兵, 消费者 queue.get() 不会永久阻塞
             await queue.put(done_event(status, error, assertion_results))
             await queue.put(None)  # 哨兵
@@ -391,6 +394,7 @@ class Engine:
         params: list[tuple[str, str]],
         *,
         item_ref: str,
+        env: str | None = None,
         collection: str | None,
         slug: str | None,
         folder: str,
@@ -403,15 +407,23 @@ class Engine:
         body_size: int,
         error: dict | None,
         duration_ms: int,
+        assertion_results: list[dict] | None = None,
     ) -> None:
         if self._store is None or not collection or not slug:
             return  # 无仓库或无定位信息: 纯执行 (如引擎单测), 不落历史
         record: dict[str, Any] = {
             "timestamp": _now_iso(),
             "item": item_ref,
+            "env": env,
             "duration_ms": duration_ms,
             "request": self._request_snapshot(request, headers, params),
         }
+        if assertion_results is not None:
+            # 断言计数 (M10 协调: GET /history 条目形状, 全文不落明细)
+            record["assertions"] = {
+                "passed": sum(1 for r in assertion_results if r["ok"]),
+                "failed": sum(1 for r in assertion_results if not r["ok"]),
+            }
         if status is None:
             record["response"] = None  # 响应头都没等到 (如超时)
         else:

@@ -498,6 +498,52 @@ class Store:
         entries.sort(key=lambda e: (e.item.seq, e.slug))
         return entries
 
+    # --- 全局历史索引 (M10 协调: GET /history 最近优先, 供 CLI history list/show) ---
+
+    def _history_base(self) -> Path:
+        return self.data_dir / ".local" / "history"
+
+    def list_recent_history(self, limit: int = 50) -> list[dict]:
+        """跨集合最近历史, 最近优先, 最多 limit 条.
+        id = 相对 history 根的无扩展名路径 (集合/[文件夹/]条目/时间戳), 字典序=时序;
+        损坏记录跳过不拖垮整表."""
+        base = self._history_base()
+        if not base.is_dir():
+            return []
+        rows: list[dict] = []
+        for path in base.rglob("*.yaml"):
+            try:
+                data = _load_yaml(path)
+            except ValueError:
+                continue
+            response = data.get("response") or {}
+            counts = data.get("assertions") or {}
+            rows.append(
+                {
+                    "id": path.relative_to(base).with_suffix("").as_posix(),
+                    "item_ref": data.get("item"),
+                    "env": data.get("env"),
+                    "status": response.get("status"),
+                    "started_at": data.get("timestamp"),
+                    "duration_ms": data.get("duration_ms"),
+                    "assertions_passed": counts.get("passed", 0),
+                    "assertions_failed": counts.get("failed", 0),
+                }
+            )
+        rows.sort(key=lambda r: r["id"], reverse=True)
+        return rows[:limit]
+
+    def read_history_entry(self, entry_id: str) -> dict:
+        """按 id (相对路径) 读单条历史全文; 段名校验挡路径穿越, 不存在 404."""
+        for part in entry_id.split("/"):
+            _validate_name("历史 id", part)
+        path = self._history_base() / f"{entry_id}.yaml"
+        if not path.is_file():
+            raise NotFoundError(f"历史条目不存在: {entry_id}")
+        data = _load_yaml(path)
+        data.pop("version", None)
+        return {"id": entry_id, **data}
+
     # --- 历史 (M2 D011): 发送即记录 append, gitignored, v1 不做自动清理 ---
 
     def _history_dir(self, collection: str, slug: str, folder: str = "") -> Path:
