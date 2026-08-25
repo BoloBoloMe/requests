@@ -275,6 +275,8 @@ export function createAppStore(services: ApiServices) {
     state.responseTab = "Body";
     const encoder = new TextEncoder();
     try {
+      // 发送以当前草稿为准 (编辑即所发): 先落盘再执行, 避免发出的是旧存储版本
+      if (state.draft) await saveDraft();
       for await (const event of services.execute({ collection, item: slug, folder })) {
         if (!state.response) break;
         if (event.type === "meta") state.response.meta = event;
@@ -286,6 +288,19 @@ export function createAppStore(services: ApiServices) {
       // Headers/日志 tab 数据源: 历史完整收发转录 (M2 D011; 后端按时间升序, 最新取末条)
       const entries = await services.listHistory(collection, slug, folder);
       if (state.response) state.response.history = entries[entries.length - 1] ?? null;
+    } catch (exc) {
+      // 发送失败 (422 变量未解析/网络错误等): 合成 done.error 事件让响应头行展示原因, 不吞错成未处理拒绝
+      if (state.response) {
+        state.response.done = {
+          type: "done",
+          timestamp: new Date().toISOString(),
+          item: `${collection}/${slug}`,
+          status: null,
+          duration_ms: 0,
+          assertions: [],
+          error: { code: "REQUEST_FAILED", message: exc instanceof Error ? exc.message : String(exc) },
+        };
+      }
     } finally {
       state.sending = false;
     }

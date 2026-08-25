@@ -68,7 +68,8 @@ describe("RequestBuilder 组装", () => {
     const execSpy = vi.spyOn(services, "execute");
     await wrapper.find("button.send").trigger("click");
     expect(execSpy).toHaveBeenCalledWith({ collection: "billing", item: "create", folder: "订单" });
-    // mock 事件流为空, 发送立即完成, 发送中态复位
+    // mock 事件流为空, 发送立即完成 (send 内含 saveDraft 先异步落盘, 排平微任务), 发送中态复位
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(store.state.sending).toBe(false);
   });
 });

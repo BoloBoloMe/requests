@@ -1,7 +1,7 @@
 // ISSUE-04 组装测试: ResponsePane 消费 mock 事件流渲染 头行/三 tab
 // 接缝: store.send() (services.execute 异步迭代) + ResponsePane 组件
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMockServices, presetBilling } from "../../../services/mock";
 import { SERVICES_KEY } from "../../../services";
 import { createAppStore, STORE_KEY } from "../../../stores/app";
@@ -93,6 +93,31 @@ describe("ResponsePane 组装", () => {
     expect(wrapper.text()).toContain("→ POST https://api.example.com/v1/orders");
     // 不脱敏: 集合变量/环境变量外的未知变量原样保留, 已知变量解析 (M5-D5)
     expect(wrapper.text()).toContain("Authorization: Bearer {{api_token}}");
+  });
+
+  it("发送前自动保存草稿: 发送的是编辑后的 URL, 不是旧存储版本", async () => {
+    const { store, services } = await mountPane();
+    const putSpy = vi.spyOn(services, "putItem");
+    store.state.draft!.url = "http://127.0.0.1:9000/echo?a=1";
+    await store.send();
+    // saveDraft 先亂 execute: putItem 携草稿 URL 被调用
+    expect(putSpy).toHaveBeenCalled();
+    expect(putSpy.mock.calls.at(-1)?.[2].url).toBe("http://127.0.0.1:9000/echo?a=1");
+  });
+
+  it("发送失败合成 done.error: 头行展示原因, promise 不拒绝", async () => {
+    const { wrapper, store, services } = await mountPane();
+    services.execute = () =>
+      (async function* (): AsyncGenerator<never> {
+        throw new Error("执行失败 422: UNRESOLVED_VARIABLES");
+      })();
+    // 不抛未处理拒绝
+    await store.send();
+    expect(store.state.sending).toBe(false);
+    expect(store.state.response?.done?.status).toBeNull();
+    expect(store.state.response?.done?.error?.message).toContain("UNRESOLVED_VARIABLES");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".r-hd").text()).toContain("REQUEST_FAILED");
   });
 
   it("非 JSON 响应体降级裸文本", async () => {
