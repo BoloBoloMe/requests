@@ -247,6 +247,9 @@ class Engine:
             if assertion_results and not all(r["ok"] for r in assertion_results):
                 event["status"] = "assert_failed"
             if error is not None:
+                # 三态钉死: 传输失败 done.status 强制 None (不留已到的 HTTP 码),
+                # 避免下游见 status 有值误判传输成功 (error 是唯一失败信号)
+                event["status"] = None
                 event["error"] = error  # 传输失败可观察 (超时/大小超限), 仅失败时出现
             return event
 

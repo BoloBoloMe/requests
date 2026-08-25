@@ -223,8 +223,8 @@ def test_engine_read_timeout_event(testbed_url):
 
 
 def test_engine_response_too_large_event(testbed_url):
-    """/large?bytes=6MB > MAX_RESPONSE_BYTES (5MB): done 带 RESPONSE_TOO_LARGE error,
-    状态码已拿到 (响应头先到), 超限即中断读取."""
+    """/large?bytes=6MB > MAX_RESPONSE_BYTES (5MB): done 带 RESPONSE_TOO_LARGE error;
+    三态钉死: 传输失败 done.status 强制 None (不留 HTTP 码), 下游不误判传输成功."""
     request = ResolvedRequest(
         name="large",
         method="GET",
@@ -234,7 +234,7 @@ def test_engine_response_too_large_event(testbed_url):
 
     done = events[-1]
     assert done["type"] == "done"
-    assert done["status"] == 200
+    assert done["status"] is None  # 钉死: error 存在 → status 必为 None
     assert done["error"]["code"] == "RESPONSE_TOO_LARGE"
 
 

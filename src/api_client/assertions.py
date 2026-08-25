@@ -81,8 +81,9 @@ def resolve(response: Response, target: str) -> Any:
             return _Miss("体非 JSON 不可取路径")
         try:
             value = jmespath.search(target[len("body.") :], body)
-        except jmespath.exceptions.JMESPathError:
-            return _Miss("路径不存在")
+        except jmespath.exceptions.JMESPathError as exc:
+            # 语法错误与路径不存在分文案: 语法错是定义问题, 报细节便于定位
+            return _Miss(f"路径语法错误: {exc}")
         return _Miss("路径不存在") if value is None else value
     return _Miss(f"未知 target: {target!r}")
 
@@ -141,7 +142,8 @@ def _eval_python(response: Response, code: str) -> Result:
     except AssertionError as exc:
         message = f"assert 失败: {exc}" if str(exc) else "assert 失败 (无消息)"
         return Result(assertion, False, message=message)
-    except Exception as exc:  # noqa: BLE001 — 逃生舱报告一切异常为错误
+    except BaseException as exc:  # noqa: BLE001 — 逃生舱报告一切异常为错误
+        # 含 SystemExit/KeyboardInterrupt: 若漏捕会跳出 engine task, 哨兵不达致消费者悬挂
         return Result(assertion, False, message=f"{type(exc).__name__}: {exc}")
     return Result(assertion, True)
 

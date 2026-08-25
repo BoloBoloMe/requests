@@ -4,9 +4,13 @@
 不起服务不打网络); TS-003 为 execute 路由 + testbed 真响应集成.
 """
 
-import pytest
+import json
+
+from fastapi.testclient import TestClient
 
 from api_client.assertions import Response, evaluate
+from api_client.store import Body, Item, Store
+from api_client.web.app import create_app
 
 
 def _json_response(body: str, status: int = 200) -> Response:
@@ -155,6 +159,16 @@ def test_op_exists_without_expect():
     assert missing.ok is False and "路径不存在" in missing.message
 
 
+def test_jmespath_syntax_error_message_distinct():
+    """JMESPath 语法错误与路径不存在分文案: 语法错报 "路径语法错误: <细节>",
+    不混同 "路径不存在" (审核返工)."""
+    resp = _json_response('{"a": 1}')
+    result = _first(resp, {"target": "body.a[", "op": "eq", "expect": 1})
+    assert result.ok is False
+    assert "路径语法错误" in result.message
+    assert "路径不存在" not in result.message  # 与路径不存在文案不得混用
+
+
 # --- TS-002 / TC-006-009: Python 逃生舱 (M6 决策 1, exec 无沙箱) ---
 
 def test_python_assert_error_classification():
@@ -169,6 +183,19 @@ def test_python_assert_error_classification():
     assert error.ok is False
     assert "KeyError" in error.message and "nope" in error.message  # 类型+消息
     assert "assert 失败" not in error.message  # 两类不得混
+
+
+def test_python_base_exception_classified_as_error():
+    """BaseException (SystemExit/KeyboardInterrupt) 也归为错误 (类型+消息),
+    不向上跳出 engine task 致哨兵不达 (审核返工)."""
+    resp = _json_response("{}")
+    exit_result = _first(resp, {"python": "raise SystemExit(1)"})
+    assert exit_result.ok is False
+    assert "SystemExit" in exit_result.message
+
+    interrupt = _first(resp, {"python": "raise KeyboardInterrupt"})
+    assert interrupt.ok is False
+    assert "KeyboardInterrupt" in interrupt.message
 
 
 def test_python_response_view_fields_injected():
@@ -204,13 +231,6 @@ def test_python_escape_hatch_no_sandbox():
 
 
 # --- TS-003 / TC-010: send 集成, done 事件带 assertions (M4 D003, testbed 真响应) ---
-
-import json
-
-from fastapi.testclient import TestClient
-
-from api_client.store import Body, Item, Store
-from api_client.web.app import create_app
 
 _TOKEN = "test-token"
 
