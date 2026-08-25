@@ -3,7 +3,7 @@
 import { reactive, type InjectionKey } from "vue";
 import { inject } from "vue";
 import type { ApiServices } from "../services/types";
-import type { ItemEntry } from "../services/types";
+import type { ItemData, ItemEntry } from "../services/types";
 
 /** 集合树文件夹节点: path 为相对集合根的路径 ("" = 根) */
 export interface FolderNode {
@@ -35,6 +35,14 @@ export interface AppState {
   /** 集合变量 (M2 D010) */
   collectionVars: Record<string, string>;
   selected: SelectedItem | null;
+  /** 请求构建器草稿: 选中条目的编辑副本 (写回走 saveDraft) */
+  draft: ItemData | null;
+  /** 发送中的展示态 (ISSUE-03; ISSUE-04 接 SSE) */
+  sending: boolean;
+  /** 构建器激活 tab (runner 失败跳断言用, ISSUE-05) */
+  builderTab: string;
+  /** 断言高亮定位 (失败红字跳转, ISSUE-05) */
+  assertionHighlight: number | null;
 }
 
 export function createAppStore(services: ApiServices) {
@@ -47,6 +55,10 @@ export function createAppStore(services: ApiServices) {
     envVars: {},
     collectionVars: {},
     selected: null,
+    draft: null,
+    sending: false,
+    builderTab: "Params",
+    assertionHighlight: null,
   });
 
   async function buildFolder(collection: string, path: string, name: string): Promise<FolderNode> {
@@ -105,6 +117,24 @@ export function createAppStore(services: ApiServices) {
   function selectItem(entry: ItemEntry): void {
     if (!state.collection) return;
     state.selected = { collection: state.collection, slug: entry.slug, folder: entry.folder };
+  }
+
+  /** 装载选中条目到草稿 (构建器数据源) */
+  async function loadDraft(): Promise<void> {
+    if (!state.selected) {
+      state.draft = null;
+      return;
+    }
+    const { collection, slug, folder } = state.selected;
+    state.draft = await services.getItem(collection, slug, folder);
+  }
+
+  /** 草稿写回适配层 (PUT 即 upsert, D010); 先取纯快照避免 reactive 代理过不了传输/克隆边界 */
+  async function saveDraft(): Promise<void> {
+    if (!state.selected || !state.draft) return;
+    const { collection, slug, folder } = state.selected;
+    const snapshot = JSON.parse(JSON.stringify(state.draft)) as ItemData;
+    await services.putItem(collection, slug, snapshot, folder);
   }
 
   /** 环境切换 (M2 D007): 写后端激活状态 + 刷新变量视图 */
@@ -188,6 +218,8 @@ export function createAppStore(services: ApiServices) {
     reloadTree,
     toggleFolder,
     selectItem,
+    loadDraft,
+    saveDraft,
     setActiveEnv,
     createItem,
     deleteItem,
