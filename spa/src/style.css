@@ -88,6 +88,79 @@ body {
   letter-spacing: 0.01em;
 }
 
+/* 集合菜单 (切换/新建集合): 复用 envmenu 下拉样式 */
+.vb .collwrap {
+  position: relative;
+}
+
+.vb .collwrap .name {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vb .collwrap .name .caret {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.vb .collmenu {
+  top: 24px;
+  right: 0;
+}
+
+.vb .collmenu .collform {
+  gap: 6px;
+  cursor: default;
+}
+
+.vb .collmenu .collform:hover {
+  background: transparent;
+}
+
+.vb .collmenu .collform input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.vb .collmenu .collform .btn {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.vb .collmenu .collerror {
+  color: var(--bad);
+  font-size: 12px;
+  cursor: default;
+}
+
+.vb .collmenu .collerror:hover {
+  background: transparent;
+}
+
+.vb .empty-hint {
+  color: var(--dim);
+  font-size: 12.5px;
+  padding: 10px 6px;
+}
+
+.vb .iconbtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.vb .iconbtn:disabled:hover {
+  color: var(--dim);
+  border-color: var(--bd);
+}
+
 .vb .envrow {
   display: flex;
   align-items: center;

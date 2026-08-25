@@ -25,7 +25,8 @@ describe("集合树", () => {
 
   it("TC-001: 渲染集合名与嵌套文件夹条目", () => {
     const { wrapper } = ctx;
-    expect(wrapper.find(".side-hd .name").text()).toBe("billing");
+    // 集合名区域现为可交互下拉 (含 ▾ 指示), 仍展示当前集合名
+    expect(wrapper.find(".side-hd .name").text()).toContain("billing");
     const folders = wrapper.findAll(".folder .f-hd");
     expect(folders.map((f) => f.text())).toEqual(
       expect.arrayContaining([expect.stringContaining("订单"), expect.stringContaining("发票")]),

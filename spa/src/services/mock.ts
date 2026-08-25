@@ -173,7 +173,11 @@ export function createMockServices(seed: MockSeed): ApiServices {
       };
     },
     async putCollectionConfig(collection: string, config: CollectionConfigData) {
-      collectionTree(collection).config = structuredClone(config);
+      // 隐式建集合: 与后端 write_collection (mkdir parents) 对齐, 不存在即建空树
+      if (!seed.collections[collection]) {
+        seed.collections[collection] = { tree: folder(collection) };
+      }
+      seed.collections[collection].config = structuredClone(config);
       return structuredClone(config);
     },
     async listEnvironments() {

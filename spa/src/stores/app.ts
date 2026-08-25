@@ -136,6 +136,17 @@ export function createAppStore(services: ApiServices) {
     state.collectionVars = config.vars;
   }
 
+  /** 新建集合: 写默认配置即隐式建集合 (后端 write_collection 自动建目录);
+   *  成功后刷新集合列表并选中. 名称非法/后端 422 时错误抛给 UI 展示. */
+  async function createCollection(name: string): Promise<void> {
+    await services.putCollectionConfig(name, {
+      vars: {},
+      defaults: { auth: null, headers: [] },
+    });
+    state.collections = await services.listCollections();
+    await selectCollection(name);
+  }
+
   async function reloadTree(): Promise<void> {
     if (!state.collection) return;
     const openPaths = new Set<string>();
@@ -336,6 +347,7 @@ export function createAppStore(services: ApiServices) {
     state,
     init,
     selectCollection,
+    createCollection,
     reloadTree,
     toggleFolder,
     selectItem,
