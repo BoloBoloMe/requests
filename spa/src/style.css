@@ -704,6 +704,15 @@ body {
   word-break: break-all;
 }
 
+/* 非 JSON 响应体裸文本降级 (RES-02) */
+.vb .rawtext {
+  font:
+    12px/1.75 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
 .vb .json .k {
   color: #7b4a94;
 }

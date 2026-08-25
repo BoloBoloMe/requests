@@ -1,7 +1,8 @@
 // services/http.ts: HTTP 适配层 (D010 REST CRUD + RPC, D013 无版本前缀)
 // 已知后端契约缺口 (不改后端, 降级处理): 无环境枚举端点 (降级 [激活环境]),
 // 无文件夹枚举端点 (降级 [] 平铺树); execute/run 流式在 ISSUE-04/05 接入.
-import { ApiError, requestJson, type HttpDeps } from "../api/http";
+import { ApiError, request, requestJson, type HttpDeps } from "../api/http";
+import { eventsFromResponse } from "../api/sse";
 import type {
   ApiServices,
   CollectionConfigData,
@@ -76,8 +77,29 @@ export function createHttpServices(deps: HttpDeps = {}): ApiServices {
     setActiveEnvironment: async (name) => {
       await put("/state", { active_environment: name });
     },
-    execute: (_req: ExecuteRequest): AsyncIterable<ExecuteEvent> => {
-      throw new Error("execute 流式接线属 ISSUE-04");
+    // POST /execute + Accept 协商 SSE (M3 D007); token 走 header (M3 D004)
+    execute(req: ExecuteRequest): AsyncIterable<ExecuteEvent> {
+      return (async function* () {
+        const resp = await request(
+          "/execute",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+            body: JSON.stringify(req),
+          },
+          deps,
+        );
+        if (!resp.ok) {
+          let detail = resp.statusText;
+          try {
+            detail = JSON.stringify(((await resp.json()) as { detail?: unknown }).detail ?? resp.statusText);
+          } catch {
+            // 保留 statusText
+          }
+          throw new ApiError(resp.status, `执行失败 ${resp.status}: ${detail}`);
+        }
+        yield* eventsFromResponse(resp);
+      })();
     },
     runCollection: (): AsyncIterable<RunEvent> => {
       throw new Error("run 流式接线属 ISSUE-05");

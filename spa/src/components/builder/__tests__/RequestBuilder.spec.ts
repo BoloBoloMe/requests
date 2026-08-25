@@ -63,9 +63,12 @@ describe("RequestBuilder 组装", () => {
     wrapper.unmount();
   });
 
-  it("发送按钮触发发送中展示态 (SSE 接线属 ISSUE-04)", async () => {
-    const { wrapper, store } = await mountBuilder();
+  it("发送按钮触发执行 (SSE 消费经 store.send, ISSUE-04 接线)", async () => {
+    const { wrapper, store, services } = await mountBuilder();
+    const execSpy = vi.spyOn(services, "execute");
     await wrapper.find("button.send").trigger("click");
-    expect(store.state.sending).toBe(true);
+    expect(execSpy).toHaveBeenCalledWith({ collection: "billing", item: "create", folder: "订单" });
+    // mock 事件流为空, 发送立即完成, 发送中态复位
+    expect(store.state.sending).toBe(false);
   });
 });

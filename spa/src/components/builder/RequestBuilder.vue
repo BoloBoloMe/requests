@@ -38,8 +38,8 @@ function setBodyText(text: string): void {
 }
 
 function send(): void {
-  // ISSUE-03 仅发送中展示态; SSE 消费属 ISSUE-04
-  store.state.sending = true;
+  // 经 store 消费 /execute SSE (ISSUE-04 接线); 发送中态由 store 维护
+  void store.send();
 }
 
 // 切换选中条目: 重置 tab 到 Params, 避免草稿与 tab 错位

@@ -2,7 +2,12 @@
 // 经 createAppStore(services) 构造注入, 组件 useStore() 取用; 测试注入 mock 服务.
 import { reactive, type InjectionKey } from "vue";
 import { inject } from "vue";
-import type { ApiServices } from "../services/types";
+import type {
+  ApiServices,
+  DoneEvent,
+  HistoryEntry,
+  MetaEvent,
+} from "../services/types";
 import type { ItemData, ItemEntry } from "../services/types";
 
 /** 集合树文件夹节点: path 为相对集合根的路径 ("" = 根) */
@@ -43,6 +48,16 @@ export interface AppState {
   builderTab: string;
   /** 断言高亮定位 (失败红字跳转, ISSUE-05) */
   assertionHighlight: number | null;
+  /** 响应面板数据 (ISSUE-04): SSE 事件累积 + 历史转录 */
+  response: {
+    meta: MetaEvent | null;
+    bodyText: string;
+    bodyBytes: number;
+    done: DoneEvent | null;
+    history: HistoryEntry | null;
+  } | null;
+  /** 响应面板激活 tab */
+  responseTab: string;
 }
 
 export function createAppStore(services: ApiServices) {
@@ -59,6 +74,8 @@ export function createAppStore(services: ApiServices) {
     sending: false,
     builderTab: "Params",
     assertionHighlight: null,
+    response: null,
+    responseTab: "Body",
   });
 
   async function buildFolder(collection: string, path: string, name: string): Promise<FolderNode> {
@@ -119,7 +136,7 @@ export function createAppStore(services: ApiServices) {
     state.selected = { collection: state.collection, slug: entry.slug, folder: entry.folder };
   }
 
-  /** 装载选中条目到草稿 (构建器数据源) */
+  /** 装载选中条目到草稿 (构建器数据源); 换条目时清空响应面板 */
   async function loadDraft(): Promise<void> {
     if (!state.selected) {
       state.draft = null;
@@ -127,6 +144,8 @@ export function createAppStore(services: ApiServices) {
     }
     const { collection, slug, folder } = state.selected;
     state.draft = await services.getItem(collection, slug, folder);
+    state.response = null;
+    state.responseTab = "Body";
   }
 
   /** 草稿写回适配层 (PUT 即 upsert, D010); 先取纯快照避免 reactive 代理过不了传输/克隆边界 */
@@ -135,6 +154,31 @@ export function createAppStore(services: ApiServices) {
     const { collection, slug, folder } = state.selected;
     const snapshot = JSON.parse(JSON.stringify(state.draft)) as ItemData;
     await services.putItem(collection, slug, snapshot, folder);
+  }
+
+  /** 发送当前条目: 消费 /execute SSE 事件流累积响应, done 后拉历史转录 (RES-01..05) */
+  async function send(): Promise<void> {
+    if (!state.selected || state.sending) return;
+    const { collection, slug, folder } = state.selected;
+    state.sending = true;
+    state.response = { meta: null, bodyText: "", bodyBytes: 0, done: null, history: null };
+    state.responseTab = "Body";
+    const encoder = new TextEncoder();
+    try {
+      for await (const event of services.execute({ collection, item: slug, folder })) {
+        if (!state.response) break;
+        if (event.type === "meta") state.response.meta = event;
+        else if (event.type === "chunk") {
+          state.response.bodyText += event.data;
+          state.response.bodyBytes += encoder.encode(event.data).length;
+        } else if (event.type === "done") state.response.done = event;
+      }
+      // Headers/日志 tab 数据源: 历史完整收发转录 (M2 D011; 后端按时间升序, 最新取末条)
+      const entries = await services.listHistory(collection, slug, folder);
+      if (state.response) state.response.history = entries[entries.length - 1] ?? null;
+    } finally {
+      state.sending = false;
+    }
   }
 
   /** 环境切换 (M2 D007): 写后端激活状态 + 刷新变量视图 */
@@ -220,6 +264,7 @@ export function createAppStore(services: ApiServices) {
     selectItem,
     loadDraft,
     saveDraft,
+    send,
     setActiveEnv,
     createItem,
     deleteItem,
