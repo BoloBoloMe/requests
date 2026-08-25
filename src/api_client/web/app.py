@@ -18,12 +18,18 @@ from .security import (
     HostAllowlistMiddleware,
     make_token_dependency,
 )
+from .static import default_spa_dir, mount_static
 
 
-def create_app(token: str, data_dir: Path | str | None = None) -> FastAPI:
+def create_app(
+    token: str,
+    data_dir: Path | str | None = None,
+    spa_dir: Path | str | None = None,
+) -> FastAPI:
     """创建服务 app; token 为本次启动的随机凭证 (D004-4).
 
     data_dir 提供时挂资源 CRUD 路由 (M3 D010); 缺省仅骨架 (供安全中间件单测).
+    spa_dir 缺省时从包路径推断仓库根 spa/ (dist 托管 + token 注入, D003/D004-4).
     """
     app = FastAPI()
     require_token = make_token_dependency(token)
@@ -38,6 +44,9 @@ def create_app(token: str, data_dir: Path | str | None = None) -> FastAPI:
     @app.get("/health", dependencies=[Depends(require_token)])
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    # 静态托管挂在所有 API 路由之后: Mount("/") 兜底, 显式路由优先匹配
+    mount_static(app, token, Path(spa_dir) if spa_dir is not None else default_spa_dir())
 
     # add_middleware 后添加者在最外层: 访问日志记全量 (含 403), Host 白名单其次
     app.add_middleware(ContentSecurityPolicyMiddleware)
