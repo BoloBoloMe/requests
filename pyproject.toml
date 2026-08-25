@@ -5,6 +5,7 @@ description = "自研测试后端 (testbed) 与 API client 项目骨架"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi",
+    "httpx",
     "jmespath>=1.1.0",
     "jsonschema>=4.26.0",
     "pyyaml>=6.0.3",
@@ -14,7 +15,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest",
-    "httpx",
+    "pytest-timeout>=2.4.0",
 ]
 
 [build-system]
@@ -30,3 +31,4 @@ packages = ["src/testbed", "src/api_client"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/testbed", "tests/api_client"]
+timeout = 300  # 单条用例兜底上限 (防挂), pytest-timeout 强杀
