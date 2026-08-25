@@ -5,8 +5,9 @@
   <title>api-client</title>
 </head>
 <body>
-  <!-- 占位页 (MILESTONE-09 实现 SPA); __APIC_TOKEN__ 由服务启动时内存内替换, 从不写盘 (M3 D004-4, ADR 0005) -->
-  <script>window.__APIC_TOKEN__ = "__APIC_TOKEN__";</script>
+  <!-- 占位页 (MILESTONE-09 实现 SPA); __APIC_TOKEN_VALUE__ 由服务启动时内存内替换, 从不写盘 (M3 D004-4, ADR 0005) -->
+  <!-- 占位符约定: 属性名 __APIC_TOKEN__ 固定, 只有值 __APIC_TOKEN_VALUE__ 参与替换 (防属性名被替换成含 - 的非法 JS) -->
+  <script>window.__APIC_TOKEN__ = "__APIC_TOKEN_VALUE__";</script>
   <div id="app">api-client SPA 占位</div>
 </body>
 </html>
