@@ -19,6 +19,22 @@ def emit_object(data, mode: str = "json") -> None:
         sys.stdout.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
+def event_failed(event: dict) -> bool:
+    """事件是否标记失败: done 断言任一未通过/传输错误, 或 summary.failed>0.
+
+    断言结果字段兼容服务端 ok (Engine 实际形状) 与原型 passed 两种词汇.
+    """
+    if event.get("type") == "done":
+        if event.get("error") or event.get("status") in (None, "assert_failed"):
+            return True
+        for assertion in event.get("assertions", []):
+            if assertion.get("ok") is False or assertion.get("passed") is False:
+                return True
+    if event.get("type") == "summary":
+        return event.get("failed", 0) > 0
+    return False
+
+
 class EventRenderer:
     """流式事件渲染: ndjson 逐行 / pretty 每行 type 开头 / json 收集为数组."""
 

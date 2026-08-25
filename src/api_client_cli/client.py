@@ -18,6 +18,8 @@ from api_client import launch
 
 from .errors import CliError, server_error
 
+# 请求级重试覆盖传输错误与对端无响应断开 (D011-4)
+_RETRYABLE = (httpx.TransportError, httpx.RemoteProtocolError)
 LOCAL_DIR = ".local"
 SERVICE_JSON = "service.json"
 STOP_TIMEOUT = 10.0
@@ -39,14 +41,14 @@ class Connection:
     def request(self, method: str, path: str, **kwargs) -> httpx.Response:
         """非流式请求: 带 token, 传输失败或 5xx 重试一次 (D011-4)."""
         headers = {"X-Auth-Token": self.token, **kwargs.pop("headers", {})}
-        last_exc: httpx.TransportError | None = None
+        last_exc: Exception | None = None
         for attempt in range(2):
             try:
                 with httpx.Client(base_url=self.base_url, timeout=10.0, trust_env=False) as client:
                     response = client.request(method, path, headers=headers, **kwargs)
                 if response.status_code < 500 or attempt == 1:
                     return response
-            except httpx.TransportError as exc:
+            except _RETRYABLE as exc:
                 last_exc = exc
                 if attempt == 1:
                     break
@@ -60,7 +62,7 @@ class Connection:
         非 200 响应在事件流开始前抛 server_error 映射的 CliError.
         """
         headers = {"X-Auth-Token": self.token, "Accept": "application/x-ndjson"}
-        last_exc: httpx.TransportError | None = None
+        last_exc: Exception | None = None
         for attempt in range(2):
             try:
                 with httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(10.0, read=None), trust_env=False) as client:
@@ -73,7 +75,7 @@ class Connection:
                             if line.strip():
                                 yield json.loads(line)
                         return
-            except httpx.TransportError as exc:
+            except _RETRYABLE as exc:
                 last_exc = exc
                 if attempt == 1:
                     break

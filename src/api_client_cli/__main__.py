@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from . import client, contract
+from .commands_send import cmd_send
 from .commands_service import cmd_status, cmd_stop, cmd_token
 from .errors import CliError, emit_error, exit_for
 
@@ -86,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     send.add_argument("item_ref", metavar="<item-ref>", help="条目引用, 格式 <collection>/<slug>.")
     send.add_argument("--env", default=None, help="环境名.")
     send.add_argument("--var", action="append", metavar="KEY=VALUE", help="覆盖变量 (可重复); 优先于环境变量.")
-    send.set_defaults(func=_placeholder("send"))
+    send.set_defaults(func=cmd_send)
 
     run = subparsers.add_parser("run", parents=[parent], help="批量执行集合内全部条目.")
     run.add_argument("collection_ref", metavar="<collection-ref>")
