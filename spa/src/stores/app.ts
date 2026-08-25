@@ -4,6 +4,7 @@ import { reactive, type InjectionKey } from "vue";
 import { inject } from "vue";
 import type {
   ApiServices,
+  AssertionResult,
   DoneEvent,
   HistoryEntry,
   MetaEvent,
@@ -24,6 +25,13 @@ export interface SelectedItem {
   collection: string;
   slug: string;
   folder: string;
+}
+
+/** 树条目运行三态徽标 (RUN-01): running ◌ / passed ✓ / failed ✗; 缺省 · 未运行 */
+export interface ItemRunResult {
+  status: "running" | "passed" | "failed";
+  /** 首条失败断言 (红字明细与跳断言定位) */
+  firstFailure?: { index: number; result: AssertionResult };
 }
 
 export interface AppState {
@@ -58,6 +66,14 @@ export interface AppState {
   } | null;
   /** 响应面板激活 tab */
   responseTab: string;
+  /** runner 内联: 条目 slug → 运行结果 (ISSUE-05, 事件 item 为 collection/slug) */
+  runResults: Record<string, ItemRunResult>;
+  /** 批量运行进行中 (并发保护: 重复触发被忽略) */
+  running: boolean;
+  /** 当前运行的收尾 promise (测试与 UI 等待用) */
+  runDone: Promise<void> | null;
+  /** git 行状态机 (RUN-02, M5-D2 单同步; D009 冲突即停原样输出) */
+  git: { state: "dirty" | "syncing" | "synced" | "failed"; error: string | null };
 }
 
 export function createAppStore(services: ApiServices) {
@@ -76,7 +92,16 @@ export function createAppStore(services: ApiServices) {
     assertionHighlight: null,
     response: null,
     responseTab: "Body",
+    runResults: {},
+    running: false,
+    runDone: null,
+    git: { state: "dirty", error: null },
   });
+
+  /** run 事件 item 为 item_ref (collection/slug), 树徽标按 slug 定位 */
+  function slugOf(itemRef: string): string {
+    return itemRef.split("/").pop() ?? itemRef;
+  }
 
   async function buildFolder(collection: string, path: string, name: string): Promise<FolderNode> {
     const [items, subNames] = await Promise.all([
@@ -154,6 +179,58 @@ export function createAppStore(services: ApiServices) {
     const { collection, slug, folder } = state.selected;
     const snapshot = JSON.parse(JSON.stringify(state.draft)) as ItemData;
     await services.putItem(collection, slug, snapshot, folder);
+  }
+
+  /** 文件夹/集合批量运行 (RUN-01): 消费 run 事件流驱动树徽标与红字明细 */
+  function run(): void {
+    if (!state.collection || state.running) return;
+    const collection = state.collection;
+    state.running = true;
+    state.runResults = {};
+    state.runDone = (async () => {
+      try {
+        for await (const event of services.runCollection(collection, state.activeEnv)) {
+          if (event.type === "meta") {
+            state.runResults[slugOf(event.item)] = { status: "running" };
+          } else if (event.type === "done") {
+            const failedIndex = event.assertions.findIndex((a) => !a.ok);
+            state.runResults[slugOf(event.item)] = {
+              // 三态口径: 仅 HTTP 码落地且断言全过计 passed (与后端 summary 一致)
+              status: typeof event.status === "number" ? "passed" : "failed",
+              ...(failedIndex >= 0
+                ? { firstFailure: { index: failedIndex, result: event.assertions[failedIndex] } }
+                : {}),
+            };
+          }
+          // summary/report 事件不驱动树 UI (报告输出物不落盘, M3)
+        }
+      } finally {
+        state.running = false;
+      }
+    })();
+  }
+
+  /** 失败红字跳转: 选中条目 + 装载草稿 + 断言 tab + 定位失败行 (RUN-01/ISSUE-03 联动) */
+  async function jumpToFailure(entry: ItemEntry): Promise<void> {
+    const result = state.runResults[entry.slug];
+    selectItem(entry);
+    await loadDraft();
+    state.builderTab = "断言";
+    state.assertionHighlight = result?.firstFailure?.index ?? null;
+  }
+
+  /** git 单同步 (RUN-02): 一键 pull+push 合并式; 失败原样展示后端输出 (D009) */
+  async function syncGit(): Promise<void> {
+    if (state.git.state === "syncing") return;
+    state.git.state = "syncing";
+    state.git.error = null;
+    try {
+      await services.gitSync();
+      state.git.state = "synced";
+    } catch (exc) {
+      state.git.state = "failed";
+      state.git.error = exc instanceof Error ? exc.message : String(exc);
+    }
   }
 
   /** 发送当前条目: 消费 /execute SSE 事件流累积响应, done 后拉历史转录 (RES-01..05) */
@@ -265,6 +342,9 @@ export function createAppStore(services: ApiServices) {
     loadDraft,
     saveDraft,
     send,
+    run,
+    jumpToFailure,
+    syncGit,
     setActiveEnv,
     createItem,
     deleteItem,

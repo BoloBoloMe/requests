@@ -2,8 +2,13 @@
 // 断言编辑器 (M6 决策 1 双形态, ADR 0006):
 // 结构化行 (target jmespath / op 比较符 / expect JSON 值) + Python 逃生舱 (CodeMirror 6)
 // SPA 仅编辑与展示表单结构, 求值归后端 Assert (M3 D008)
+import { inject } from "vue";
 import type { Assertion } from "../../services/types";
+import { STORE_KEY } from "../../stores/app";
 import CodeEditor from "./CodeEditor.vue";
+
+// 失败行定位 (ISSUE-05): store 可选注入 (独立组件测试无 store 时不高亮)
+const store = inject(STORE_KEY, null);
 
 const props = defineProps<{ assertions: Assertion[] }>();
 const emit = defineEmits<{ "update:assertions": [Assertion[]] }>();
@@ -51,7 +56,7 @@ function addPython(): void {
 
 <template>
   <div class="alist">
-    <div v-for="(a, i) in assertions" :key="i" class="row">
+    <div v-for="(a, i) in assertions" :key="i" class="row" :class="{ hl: store?.state.assertionHighlight === i }">
       <template v-if="a.python !== undefined">
         <span class="py">python</span>
         <div style="flex: 1">

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 侧栏 (ISSUE-02): 集合名 + 环境胶囊 + 新建/集合变量按钮 + 集合树 (+ git 行属 ISSUE-05)
+// 侧栏 (ISSUE-02): 集合名 + 环境胶囊 + 新建/集合变量按钮 + 集合树 + git 行 (ISSUE-05)
 import { useStore } from "../../stores/app";
 import EnvMenu from "./EnvMenu.vue";
 import VarEditor from "./VarEditor.vue";
 import FolderTree from "./FolderTree.vue";
+import GitRow from "./GitRow.vue";
 import { ref } from "vue";
 
 const store = useStore();
@@ -32,5 +33,6 @@ defineExpose({ methodClass });
     <div class="tree">
       <FolderTree v-if="store.state.root" :node="store.state.root" :root="true" />
     </div>
+    <GitRow />
   </div>
 </template>

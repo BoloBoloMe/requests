@@ -101,8 +101,29 @@ export function createHttpServices(deps: HttpDeps = {}): ApiServices {
         yield* eventsFromResponse(resp);
       })();
     },
-    runCollection: (): AsyncIterable<RunEvent> => {
-      throw new Error("run 流式接线属 ISSUE-05");
+    // POST /collections/{x}/run + Accept 协商 SSE (D010 RPC, D007 事件模型)
+    runCollection(collection: string, env?: string | null): AsyncIterable<RunEvent> {
+      return (async function* () {
+        const resp = await request(
+          `/collections/${encodeURIComponent(collection)}/run`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+            body: JSON.stringify({ env: env ?? null }),
+          },
+          deps,
+        );
+        if (!resp.ok) {
+          let detail = resp.statusText;
+          try {
+            detail = JSON.stringify(((await resp.json()) as { detail?: unknown }).detail ?? resp.statusText);
+          } catch {
+            // 保留 statusText
+          }
+          throw new ApiError(resp.status, `运行失败 ${resp.status}: ${detail}`);
+        }
+        yield* eventsFromResponse(resp);
+      })();
     },
     listHistory: (collection, slug, folder) =>
       get<{ entries: HistoryEntry[] }>(
