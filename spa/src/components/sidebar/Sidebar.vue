@@ -34,6 +34,15 @@ defineExpose({ methodClass });
         >
           ＋
         </button>
+        <!-- 集合级运行 (RUN-01): 根集合无树头行, 入口放侧栏头; 运行中禁用 -->
+        <button
+          class="iconbtn"
+          title="运行集合"
+          :disabled="!store.state.collection || store.state.running"
+          @click="store.run()"
+        >
+          ▶
+        </button>
         <button class="iconbtn" title="集合变量" @click="showVars = !showVars">⚙</button>
       </div>
       <div style="position: relative">

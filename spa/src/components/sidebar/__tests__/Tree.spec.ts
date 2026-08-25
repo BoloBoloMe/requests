@@ -1,7 +1,7 @@
 // TS-001 (ISSUE-02): 集合树渲染 + 折叠
 // 接缝: Sidebar/Tree 组件, 注入 mock 服务 (预置一集合两文件夹若干条目)
 import { mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockServices, presetBilling } from "../../../services/mock";
 import { createAppStore, STORE_KEY } from "../../../stores/app";
 import { SERVICES_KEY } from "../../../services";
@@ -49,5 +49,17 @@ describe("集合树", () => {
     expect(folderHd.find(".arrow.shut").exists()).toBe(true);
     await folderHd.trigger("click");
     expect(wrapper.text()).toContain("发票详情");
+  });
+
+  it("TC-111: 侧栏头「运行集合」按钮触发整集合运行 (根集合无树头行的入口), 运行中禁用", async () => {
+    const { wrapper, store, services } = ctx;
+    const runSpy = vi.spyOn(services, "runCollection");
+    const btn = wrapper.find('button[title="运行集合"]');
+    expect(btn.exists()).toBe(true);
+    await btn.trigger("click");
+    expect(runSpy).toHaveBeenCalledWith("billing", store.state.activeEnv);
+    // mock 事件流立即排空, 运行态复位
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.state.running).toBe(false);
   });
 });
