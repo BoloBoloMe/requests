@@ -9,6 +9,8 @@ import subprocess
 import sys
 
 from . import client, contract
+from .commands_history import cmd_history_list, cmd_history_show
+from .commands_run import cmd_run
 from .commands_send import cmd_send
 from .commands_service import cmd_status, cmd_stop, cmd_token
 from .errors import CliError, emit_error, exit_for
@@ -93,13 +95,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("collection_ref", metavar="<collection-ref>")
     run.add_argument("--env", default=None, help="环境名.")
     run.add_argument("--var", action="append", metavar="KEY=VALUE", help="覆盖变量 (可重复); 优先于环境变量.")
-    run.set_defaults(func=_placeholder("run"))
+    run.set_defaults(func=cmd_run)
 
     for group, verbs in (
         ("collection", ("list", "show")),
         ("item", ("list", "show")),
         ("env", ("list", "show")),
-        ("history", ("list", "show")),
     ):
         group_parser = subparsers.add_parser(group, help=f"{group} 资源查询.")
         group_sub = group_parser.add_subparsers(dest=f"{group}_cmd", parser_class=JSONErrorParser)
@@ -107,6 +108,13 @@ def build_parser() -> argparse.ArgumentParser:
             verb_parser = group_sub.add_parser(verb, parents=[parent])
             verb_parser.add_argument("ref", nargs="?", default=None)
             verb_parser.set_defaults(func=_placeholder(f"{group} {verb}"))
+
+    history = subparsers.add_parser("history", help="执行历史查询.", epilog="示例: apic history list | apic history show <id>")
+    history_sub = history.add_subparsers(dest="history_cmd", parser_class=JSONErrorParser)
+    history_sub.add_parser("list", parents=[parent], help="列出最近历史条目.").set_defaults(func=cmd_history_list)
+    history_show = history_sub.add_parser("show", parents=[parent], help="查看单条历史.")
+    history_show.add_argument("id", metavar="<id>")
+    history_show.set_defaults(func=cmd_history_show)
 
     service = subparsers.add_parser("service", help="服务生命周期.", epilog="示例: apic service status | apic service token")
     service_sub = service.add_subparsers(dest="service_cmd", parser_class=JSONErrorParser)
