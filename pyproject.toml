@@ -24,11 +24,11 @@ build-backend = "hatchling.build"
 
 [project.scripts]
 testbed = "testbed.__main__:main"
-apic = "api_client.__main__:main"
+apic = "api_client_cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/testbed", "src/api_client"]
+packages = ["src/testbed", "src/api_client", "src/api_client_cli"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/testbed", "tests/api_client"]
+testpaths = ["tests/testbed", "tests/api_client", "tests/api_client_cli"]
 timeout = 300  # 单条用例兜底上限 (防挂), pytest-timeout 强杀
