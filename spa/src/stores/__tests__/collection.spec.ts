@@ -130,4 +130,16 @@ describe("切换集合状态清理 (store)", () => {
     expect(store.state.draft).toBeNull();
     expect(store.state.runResults).toEqual({});
   });
+
+  it("TC-110: 选中条目自动装载草稿 (树点击路径, 无需显式 loadDraft)", async () => {
+    const services = createMockServices(presetBilling());
+    const store = createAppStore(services);
+    await store.init();
+    const node = store.state.root!.folders.find((f) => f.name === "订单")!;
+    // 模拟树点击: 只调 selectItem, 微任务排空后草稿应已装载
+    store.selectItem(node.items.find((i) => i.slug === "list")!);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.state.selected?.slug).toBe("list");
+    expect(store.state.draft?.name).toBe("订单列表");
+  });
 });

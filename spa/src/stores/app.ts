@@ -186,6 +186,8 @@ export function createAppStore(services: ApiServices) {
   function selectItem(entry: ItemEntry): void {
     if (!state.collection) return;
     state.selected = { collection: state.collection, slug: entry.slug, folder: entry.folder };
+    // 选中即装载草稿 (树点击/新建统一走此路径); 并发与切换竞态由 loadDraft 守卫吸收
+    void loadDraft();
   }
 
   /** 装载选中条目到草稿 (构建器数据源); 换条目时清空响应面板 */
@@ -195,7 +197,11 @@ export function createAppStore(services: ApiServices) {
       return;
     }
     const { collection, slug, folder } = state.selected;
-    state.draft = await services.getItem(collection, slug, folder);
+    const draft = await services.getItem(collection, slug, folder);
+    // 竞态守卫: 等待期间已切换条目/集合, 丢弃过期草稿不回落
+    const cur = state.selected;
+    if (!cur || cur.collection !== collection || cur.slug !== slug || cur.folder !== folder) return;
+    state.draft = draft;
     state.response = null;
     state.responseTab = "Body";
   }
