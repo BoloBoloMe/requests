@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 from api_client.engine import Engine
 from api_client.runner import junit_xml, run_collection
-from api_client.store import Item, Store
+from api_client.store import CollectionConfig, Item, KV, Store
 from api_client.web.app import create_app
 
 TOKEN = "test-token"
@@ -168,6 +168,196 @@ def test_junit_report_parseable_and_structured(tmp_path, testbed_url):
     # 通过条目无 failure
     assert cases[0].find("failure") is None
     assert cases[2].find("failure") is None
+
+
+# --- 返工 1 [重要]: 单条目意外异常不中断整批 (D-AFK-009) ---
+
+
+def test_runner_unexpected_item_error_does_not_interrupt(tmp_path, testbed_url):
+    """3 条目中第 2 条 auth.type 非法 (Engine 抛 ValueError): 该条记失败
+    (done.status=null + error.code=UNEXPECTED_ERROR, 与既有 error.code 词汇一致),
+    后续第 3 条照常执行, 事件流仍含 x3 done + summary 正常收尾."""
+    _write_three_item_collection(tmp_path, testbed_url)
+    store = Store(tmp_path)
+    # 覆盖第 2 条为非法认证类型: resolve 不校验 auth.type, 异常在执行段爆发
+    store.write_item(
+        "demo",
+        "missing",
+        Item(
+            name="bad-auth",
+            method="GET",
+            url=f"{testbed_url}/echo",
+            seq=2,
+            auth={"type": "hmac"},  # 不在五种认证内 (M1 D003)
+        ),
+    )
+    run = run_collection(store, Engine(store), "demo")
+    events = _collect(run)
+
+    # 第 2 条无 chunk (认证解析先于网络), 其余条目事件完整
+    assert [e["type"] for e in events] == [
+        "meta", "chunk", "done",
+        "meta", "done",
+        "meta", "chunk", "done",
+        "summary",
+    ]
+    dones = [e for e in events if e["type"] == "done"]
+    assert dones[1]["status"] is None
+    assert dones[1]["error"]["code"] == "UNEXPECTED_ERROR"
+    # 第 3 条照常执行
+    assert dones[2]["status"] == 200
+
+    summary = events[-1]
+    assert summary["total"] == 3
+    assert summary["passed"] == 2
+    assert summary["failed"] == 1
+    assert summary["items"][1] == {"item": "demo/missing", "status": None, "passed": False}
+
+    # JUnit 口径: status=null 计 errors (与传输失败同口径)
+    root = ET.fromstring(junit_xml(run.results, suite_name="demo"))
+    assert root.get("tests") == "3"
+    assert root.get("errors") == "1"
+    assert root.get("failures") == "0"
+
+
+# --- 返工 2: JUnit errors 分支 (传输失败条目 -> <error>, 不进 failures) ---
+
+
+def test_junit_transmission_failure_counts_as_error(tmp_path):
+    """指向不存在端口的条目 (连接拒绝, done.status=null): testsuite errors=1
+    且该 testcase 含 <error> 元素, failures=0 且无 <failure>."""
+    store = Store(tmp_path)
+    store.write_item(
+        "demo",
+        "down",
+        Item(name="down", method="GET", url="http://127.0.0.1:1/never-reached", seq=1),
+    )
+    run = run_collection(store, Engine(store), "demo")
+    events = _collect(run)
+    done = next(e for e in events if e["type"] == "done")
+    assert done["status"] is None  # 传输失败三态钉死
+
+    root = ET.fromstring(junit_xml(run.results, suite_name="demo"))
+    assert root.get("tests") == "1"
+    assert root.get("errors") == "1"
+    assert root.get("failures") == "0"
+    case = root.find("testcase")
+    assert case.find("error") is not None
+    assert case.find("failure") is None
+
+
+# --- 返工 3: SSE 路径 report 帧内容可解析 ---
+
+
+def _parse_sse_frames(text: str) -> list[tuple[str, str]]:
+    """SSE 文本 -> [(event, data)] 帧列表 (data 多行以 \\n 连接)."""
+    frames: list[tuple[str, str]] = []
+    for block in text.split("\n\n"):
+        event, data_lines = "", []
+        for line in block.splitlines():
+            if line.startswith("event:"):
+                event = line[len("event:"):].strip()
+            elif line.startswith("data:"):
+                data_lines.append(line[len("data:"):].lstrip(" "))
+        if event:
+            frames.append((event, "\n".join(data_lines)))
+    return frames
+
+
+def test_run_sse_report_frame_xml_parseable(tmp_path, testbed_url):
+    """SSE 事件流末尾 report 帧: data 中 XML 可被 xml.etree 解析 (NDJSON 已覆盖)."""
+    _write_three_item_collection(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/collections/demo/run",
+        headers={**_auth(), "Accept": "text/event-stream"},
+    )
+    assert response.status_code == 200
+    frames = _parse_sse_frames(response.text)
+    event, data = frames[-1]
+    assert event == "report"
+    report = json.loads(data)
+    assert report["format"] == "junit"
+    root = ET.fromstring(report["content"])
+    assert root.tag == "testsuite"
+    assert root.get("tests") == "3"
+
+
+# --- 返工 4: ?env= 与缺省激活环境 ---
+
+
+def _write_env_collection(data_dir, testbed_url) -> None:
+    """单条目集合: header X-Token 插值 {{token}}, 由环境变量供值."""
+    store = Store(data_dir)
+    store.write_item(
+        "demo",
+        "echo",
+        Item(
+            name="echo",
+            method="GET",
+            url=f"{testbed_url}/echo",
+            seq=1,
+            headers=[KV(key="X-Token", value="{{token}}")],
+        ),
+    )
+    store.write_environment("dev", {"token": "dev-secret"})
+    store.write_environment("prod", {"token": "prod-secret"})
+
+
+def test_run_env_param_overrides_active(tmp_path, testbed_url):
+    """?env=prod 指定环境生效 (激活为 dev): 实际发送 header 取 prod 变量值."""
+    _write_env_collection(tmp_path, testbed_url)
+    Store(tmp_path).set_active_environment("dev")
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/collections/demo/run?env=prod",
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+    meta = next(e for e in events if e["type"] == "meta")
+    assert meta["env"] == "prod"
+    chunk = next(e for e in events if e["type"] == "chunk")
+    assert json.loads(chunk["data"])["headers"]["x-token"] == "prod-secret"
+
+
+def test_run_default_uses_active_environment(tmp_path, testbed_url):
+    """env_name 缺省读激活环境 (M2 D007): meta.env 为激活名, header 取其变量值."""
+    _write_env_collection(tmp_path, testbed_url)
+    store = Store(tmp_path)
+    store.set_active_environment("dev")
+    events = _collect(run_collection(store, Engine(store), "demo"))
+    meta = next(e for e in events if e["type"] == "meta")
+    assert meta["env"] == "dev"
+    chunk = next(e for e in events if e["type"] == "chunk")
+    assert json.loads(chunk["data"])["headers"]["x-token"] == "dev-secret"
+
+
+# --- 返工 5: 空集合 run 钉死 (200 + 空 summary/testsuite, 不 404) ---
+
+
+def test_run_empty_collection_returns_empty_summary(tmp_path):
+    """空集合 run: 200, 事件流仅 summary + report; summary total=0,
+    testsuite tests=0 且无 testcase (行为钉死, 此时不 404)."""
+    Store(tmp_path).write_collection("empty", CollectionConfig())
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/collections/empty/run",
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+    assert [e["type"] for e in events] == ["summary", "report"]
+    summary = events[0]
+    assert summary["total"] == 0
+    assert summary["passed"] == 0
+    assert summary["failed"] == 0
+    assert summary["items"] == []
+    root = ET.fromstring(events[1]["content"])
+    assert root.get("tests") == "0"
+    assert root.get("failures") == "0"
+    assert root.get("errors") == "0"
+    assert root.findall("testcase") == []
 
 
 # --- TS-003 TC-008/009: run API 薄壳 (协商/report 事件/404/401) ---

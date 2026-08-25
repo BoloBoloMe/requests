@@ -1,7 +1,9 @@
 """Runner: 集合 -> 批量事件流 + JUnit 报告 (M3 D008).
 
 顺序执行 (M3 D013, v1 不并发): 逐条复用 Engine 完整事件流 (meta/chunk/done,
-不吞 chunk, M4 D003), 断言失败不中断后续条目; 末尾发 summary.
+不吞 chunk, M4 D003), 断言失败不中断后续条目; 单条目意外异常 (如未知认证类型)
+隔离为该条失败 (status=null + error.code=UNEXPECTED_ERROR), 不中断整批 (D-AFK-009);
+末尾发 summary.
 统计口径: passed/failed 按断言 ok 计数 (done.status 为 int 且非 assert_failed
 即 passed; 断言失败或传输失败计 failed, ISSUE-10 CLI 消费 summary 同口径).
 JUnit 报告为输出物, 手写最小 XML (xml.etree), 不入数据仓库 (M2 D011).
@@ -65,19 +67,39 @@ class Run:
         for slug, item, resolved in self._prepared:
             item_ref = f"{self._collection}/{slug}"
             done: dict | None = None
-            async for event in self._engine.execute(
-                resolved,
-                item_ref=item_ref,
-                env=self._env_name,
-                collection=self._collection,
-                slug=slug,
-                assertions=item.assertions,  # 结果进 done.assertions (M4 D003)
-            ):
-                if event["type"] == "done":
-                    done = event
-                yield event
-            assert done is not None  # Engine 收尾必达 (done + 哨兵)
-            # 断言失败不中断: 只记录结果, 继续下一条目
+            try:
+                async for event in self._engine.execute(
+                    resolved,
+                    item_ref=item_ref,
+                    env=self._env_name,
+                    collection=self._collection,
+                    slug=slug,
+                    assertions=item.assertions,  # 结果进 done.assertions (M4 D003)
+                ):
+                    if event["type"] == "done":
+                        done = event
+                    yield event
+            except Exception as exc:
+                # 单条目意外异常不中断整批 (D-AFK-009): Engine 收尾已把失败 done
+                # (status=null + error.code=UNEXPECTED_ERROR) 入队出流, 此处吞掉异常
+                # 继续后续条目; 仅捕获 Exception, 不吞取消/GeneratorExit
+                if done is None:
+                    # 极端路径防御 (异常发生在 done 出流前): 补一个同词汇的失败 done,
+                    # 保住 每条目必有 done 的事件流不变式
+                    done = {
+                        "type": "done",
+                        "timestamp": _now_iso(),
+                        "item": item_ref,
+                        "status": None,
+                        "duration_ms": 0,
+                        "assertions": [],
+                        "error": {
+                            "code": "UNEXPECTED_ERROR",
+                            "message": f"{type(exc).__name__}: {exc}",
+                        },
+                    }
+                    yield done
+            # 断言失败/意外异常不中断: 只记录结果, 继续下一条目
             self.results.append(
                 RunResult(
                     item=item_ref,
