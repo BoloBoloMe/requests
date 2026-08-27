@@ -89,3 +89,11 @@
 - 理由: 当前服务无 /execute 端点, 子串匹配无实际风险面; 协商逻辑属 ISSUE-03 边界.
 - 影响: 无; ISSUE-03 执行者须注意.
 - 风险: 低. 副通道仍需有效 token, 不构成认证绕过.
+
+## D-AFK-011 — 08 协调补丁: execute/run 请求体 vars 覆盖层 (补记, 2026-08-27 M11 复核时用户接受)
+
+- 问题: M10 ISSUE-04 任务书要求 execute/run 请求体可携带 vars (CLI --var 依赖, 一次性覆盖), 08 侧请求体只有 env 无 vars; 该补丁 (e02e4bf) 执行时未同步落账本, M11 复核发现缺失, 现补记.
+- 决策: 08 补 execute/run 请求体 {env?, vars?}; vars 为一次性覆盖层 (D-AFK-011), 透传 build_request, 优先级最高 (高于环境 vars/secrets 合并视图与集合 vars); 与 D-AFK-012 (GET /environments) 同为 08 协调补丁序列, vars 为前置.
+- 理由: CLI --var 契约依赖该层; 不补则 CLI 的 vars 覆盖对真服务失效 (只对 fake HTTP 生效).
+- 影响: M10 CLI --var 对真服务可用 (M11 亲测: send smoke/vars --var api_token=demo-token → 200); 请求体形状 {env?, vars?} 成为 contract 事实.
+- 风险: 低. 2026-08-27 M11 验收用户复核 12 条全部接受.
