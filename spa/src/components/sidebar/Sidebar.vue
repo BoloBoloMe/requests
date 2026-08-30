@@ -46,7 +46,9 @@ defineExpose({ methodClass });
         <button class="iconbtn" title="集合变量" @click="showVars = !showVars">⚙</button>
       </div>
       <div style="position: relative">
-        <VarEditor v-if="showVars" @close="showVars = false" />
+        <Transition name="pop">
+          <VarEditor v-if="showVars" @close="showVars = false" />
+        </Transition>
       </div>
     </div>
     <div class="tree">

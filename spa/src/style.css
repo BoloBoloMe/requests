@@ -1121,3 +1121,62 @@ body {
   border-bottom: 1px dashed var(--bd);
   background: #faf9f6;
 }
+
+/* ============ 组件动画 (G4): 只过渡 transform/opacity, 避免布局抖动 ============ */
+
+/* 弹层显隐 (下拉菜单/管理弹层): fade + 轻缩放 */
+.pop-enter-active,
+.pop-leave-active {
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.pop-enter-from,
+.pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+
+/* 树文件夹展开/折叠: 内容 fade (高度过渡会引发布局抖动, 弃) */
+.fold-enter-active,
+.fold-leave-active {
+  transition: opacity 0.12s ease;
+}
+.fold-enter-from,
+.fold-leave-to {
+  opacity: 0;
+}
+
+/* 构建器 tab 面板切换: fade */
+.tabpane-enter-active {
+  transition: opacity 0.12s ease;
+}
+.tabpane-enter-from {
+  opacity: 0;
+}
+
+/* 徽标状态出现 (✓/✗): 弹入 */
+.badge-in-enter-active {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.badge-in-enter-from {
+  transform: scale(0.4);
+}
+
+/* 动画系统偏好: 减弱动画 */
+@media (prefers-reduced-motion: reduce) {
+  .pop-enter-active,
+  .pop-leave-active,
+  .fold-enter-active,
+  .fold-leave-active,
+  .tabpane-enter-active,
+  .badge-in-enter-active {
+    transition: none;
+  }
+}
+
+/* tab 面板包装 (G4): 供 Transition 切换 */
+.vb .tabpane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}

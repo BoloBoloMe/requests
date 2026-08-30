@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 环境胶囊 + 下拉 (M5 决策 1): 点击弹下拉, 切换即全局换环境 (写适配层激活状态)
 // G2: 下拉尾部加「管理环境」入口, 弹 EnvEditor 管理弹层 (CRUD+激活切换)
+// G4: 下拉/弹层显隐加 pop 过渡 (fade + 轻缩放)
 import { ref } from "vue";
 import { useStore } from "../../stores/app";
 import EnvEditor from "./EnvEditor.vue";
@@ -36,19 +37,23 @@ function startManage(): void {
       <span>{{ store.state.activeEnv ?? "无环境" }}</span>
       <span class="caret">▾</span>
     </div>
-    <div v-if="open" class="envmenu">
-      <div
-        v-for="name in store.state.envs"
-        :key="name"
-        :data-env="name"
-        @click="choose(name)"
-      >
-        <span class="dot" :style="{ background: dotColor(name) }"></span>
-        {{ name }}
-        <span v-if="name === store.state.activeEnv" style="margin-left: auto">✓</span>
+    <Transition name="pop">
+      <div v-if="open" class="envmenu">
+        <div
+          v-for="name in store.state.envs"
+          :key="name"
+          :data-env="name"
+          @click="choose(name)"
+        >
+          <span class="dot" :style="{ background: dotColor(name) }"></span>
+          {{ name }}
+          <span v-if="name === store.state.activeEnv" style="margin-left: auto">✓</span>
+        </div>
+        <div data-manage-env @click="startManage">⚙ 管理环境…</div>
       </div>
-      <div data-manage-env @click="startManage">⚙ 管理环境…</div>
-    </div>
-    <EnvEditor v-if="managing" @close="managing = false" />
+    </Transition>
+    <Transition name="pop">
+      <EnvEditor v-if="managing" @close="managing = false" />
+    </Transition>
   </div>
 </template>

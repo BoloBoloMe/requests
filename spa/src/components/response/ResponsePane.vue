@@ -67,34 +67,38 @@ const showTabs = computed(() => resp.value?.done != null);
       >
     </div>
     <div v-if="showTabs" class="r-body">
-      <template v-if="store.state.responseTab === 'Body'">
-        <template v-if="bodyJson.ok">
-          <div class="bodyview">
-            <span :class="{ on: bodyView === 'pretty' }" @click="bodyView = 'pretty'">JSON</span>
-            <span :class="{ on: bodyView === 'tree' }" @click="bodyView = 'tree'">树</span>
+      <Transition name="tabpane" mode="out-in">
+        <div :key="store.state.responseTab" class="tabpane">
+          <template v-if="store.state.responseTab === 'Body'">
+            <template v-if="bodyJson.ok">
+              <div class="bodyview">
+                <span :class="{ on: bodyView === 'pretty' }" @click="bodyView = 'pretty'">JSON</span>
+                <span :class="{ on: bodyView === 'tree' }" @click="bodyView = 'tree'">树</span>
+              </div>
+              <pre v-if="bodyView === 'pretty'" :key="`p-${resp?.done?.timestamp}`" class="rawtext">{{ bodyPretty }}</pre>
+              <JsonTree v-else :key="resp?.done?.timestamp" :data="bodyJson.value" />
+            </template>
+            <pre v-else class="rawtext">{{ resp?.bodyText || "(空响应体)" }}</pre>
+          </template>
+          <div v-else-if="store.state.responseTab === 'Headers'" class="json">
+            <div v-for="(h, i) in headers" :key="i">
+              <span class="k">{{ h.key }}</span
+              >: {{ h.value }}
+            </div>
+            <div v-if="headers.length === 0" class="dim">(无历史转录, 响应头不可得)</div>
           </div>
-          <pre v-if="bodyView === 'pretty'" :key="`p-${resp?.done?.timestamp}`" class="rawtext">{{ bodyPretty }}</pre>
-          <JsonTree v-else :key="resp?.done?.timestamp" :data="bodyJson.value" />
-        </template>
-        <pre v-else class="rawtext">{{ resp?.bodyText || "(空响应体)" }}</pre>
-      </template>
-      <div v-else-if="store.state.responseTab === 'Headers'" class="json">
-        <div v-for="(h, i) in headers" :key="i">
-          <span class="k">{{ h.key }}</span
-          >: {{ h.value }}
+          <div v-else class="json">
+            <div
+              v-for="(line, i) in logLines"
+              :key="i"
+              :class="line.dir === 'out' ? 'log-out' : line.dir === 'in' ? 'log-in' : 'log-meta'"
+            >
+              {{ line.text }}
+            </div>
+            <div v-if="logLines.length === 0" class="dim">(无历史转录)</div>
+          </div>
         </div>
-        <div v-if="headers.length === 0" class="dim">(无历史转录, 响应头不可得)</div>
-      </div>
-      <div v-else class="json">
-        <div
-          v-for="(line, i) in logLines"
-          :key="i"
-          :class="line.dir === 'out' ? 'log-out' : line.dir === 'in' ? 'log-in' : 'log-meta'"
-        >
-          {{ line.text }}
-        </div>
-        <div v-if="logLines.length === 0" class="dim">(无历史转录)</div>
-      </div>
+      </Transition>
     </div>
   </div>
 </template>

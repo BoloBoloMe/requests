@@ -88,7 +88,44 @@ function onFailNoteClick(entry: ItemEntry): void {
       <span :class="folderBadge.cls" :style="folderBadge.color ? `color:${folderBadge.color}` : ''">{{ folderBadge.text }}</span>
       <button class="run" title="运行此文件夹" @click.stop="onRunFolder">▶</button>
     </div>
-    <div v-if="root || node.open" :class="root ? undefined : 'f-kids'">
+    <Transition v-if="!root" name="fold">
+      <div v-if="node.open" class="f-kids">
+        <draggable
+          v-model="dragItems"
+          item-key="slug"
+          handle=".grip"
+          :animation="120"
+          @end="onDragEnd"
+        >
+          <template #item="{ element }">
+            <div>
+              <div class="req" :class="{ sel: isSelected(element) }" @click="store.selectItem(element)">
+                <Transition name="badge-in" mode="out-in">
+                  <span :key="stClass(element)" :class="stClass(element)">{{ stText(element) }}</span>
+                </Transition>
+                <span class="m" :class="methodClass(element.item.method)">{{ shortMethod(element.item.method) }}</span>
+                {{ element.item.name }}
+                <span class="grip">⠿</span>
+                <span
+                  class="x del"
+                  title="删除请求"
+                  @click.stop="store.deleteItem(element)"
+                >×</span>
+              </div>
+              <div
+                v-if="failNote(element)"
+                class="failnote"
+                @click.stop="onFailNoteClick(element)"
+              >
+                {{ failNote(element) }}
+              </div>
+            </div>
+          </template>
+        </draggable>
+        <FolderTree v-for="sub in node.folders" :key="sub.path" :node="sub" />
+      </div>
+    </Transition>
+    <template v-else>
       <draggable
         v-model="dragItems"
         item-key="slug"
@@ -99,7 +136,9 @@ function onFailNoteClick(entry: ItemEntry): void {
         <template #item="{ element }">
           <div>
             <div class="req" :class="{ sel: isSelected(element) }" @click="store.selectItem(element)">
-              <span :class="stClass(element)">{{ stText(element) }}</span>
+              <Transition name="badge-in" mode="out-in">
+                <span :key="stClass(element)" :class="stClass(element)">{{ stText(element) }}</span>
+              </Transition>
               <span class="m" :class="methodClass(element.item.method)">{{ shortMethod(element.item.method) }}</span>
               {{ element.item.name }}
               <span class="grip">⠿</span>
@@ -110,7 +149,7 @@ function onFailNoteClick(entry: ItemEntry): void {
               >×</span>
             </div>
             <div
-              v-if="failNote(element) && (root || node.open)"
+              v-if="failNote(element)"
               class="failnote"
               @click.stop="onFailNoteClick(element)"
             >
@@ -120,6 +159,6 @@ function onFailNoteClick(entry: ItemEntry): void {
         </template>
       </draggable>
       <FolderTree v-for="sub in node.folders" :key="sub.path" :node="sub" />
-    </div>
+    </template>
   </div>
 </template>

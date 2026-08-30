@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 集合菜单: 集合名可点击弹下拉, 列出全部集合供切换; 内联「新建集合」表单
 // (隐式建集合: store.createCollection 经适配层写默认配置, 后端自动建目录)
+// G4: 下拉显隐加 pop 过渡
 import { ref } from "vue";
 import { useStore } from "../../stores/app";
 
@@ -54,7 +55,8 @@ function cancelCreate(): void {
     <span>{{ store.state.collection ?? "api-client" }}</span>
     <span class="caret">▾</span>
   </div>
-  <div v-if="open" class="envmenu collmenu">
+  <Transition name="pop">
+    <div v-if="open" class="envmenu collmenu">
     <div
       v-for="name in store.state.collections"
       :key="name"
@@ -78,5 +80,6 @@ function cancelCreate(): void {
       <button class="btn" data-create-cancel @click="cancelCreate">取消</button>
     </div>
     <div v-if="error" class="collerror">{{ error }}</div>
-  </div>
+    </div>
+  </Transition>
 </template>

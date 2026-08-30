@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 请求构建器组装 (ISSUE-03, M5 决策 3): URL 栏 + 五 tab (Params/Headers/Body/Auth/断言)
 // 数据源为 store 草稿 (选中条目联动 ISSUE-02), 写回经 services 适配层 (saveDraft)
-import { computed, watch } from "vue";
+import { computed, watch, Transition } from "vue";
 import { useStore } from "../../stores/app";
 import type { Body } from "../../services/types";
 import UrlBar from "./UrlBar.vue";
@@ -81,47 +81,51 @@ watch(
         >
       </div>
       <div class="kvwrap">
-        <KvEditor
-          v-if="store.state.builderTab === 'Params'"
-          :rows="draft.params"
-          @update:rows="draft.params = $event"
-        />
-        <KvEditor
-          v-else-if="store.state.builderTab === 'Headers'"
-          :rows="draft.headers"
-          @update:rows="draft.headers = $event"
-        />
-        <template v-else-if="store.state.builderTab === 'Body'">
-          <div style="margin-bottom: 8px; display: flex; gap: 6px; align-items: center">
-            <span style="font-size: 11.5px; color: var(--dim)">类型</span>
-            <select
-              class="bodytype"
-              :value="draft.body.type"
-              @change="setBodyType(($event.target as HTMLSelectElement).value as Body['type'])"
-            >
-              <option v-for="t in BODY_TYPES" :key="t" :value="t">{{ t }}</option>
-            </select>
+        <Transition name="tabpane" mode="out-in">
+          <div :key="store.state.builderTab" class="tabpane">
+            <KvEditor
+              v-if="store.state.builderTab === 'Params'"
+              :rows="draft.params"
+              @update:rows="draft.params = $event"
+            />
+            <KvEditor
+              v-else-if="store.state.builderTab === 'Headers'"
+              :rows="draft.headers"
+              @update:rows="draft.headers = $event"
+            />
+            <template v-else-if="store.state.builderTab === 'Body'">
+              <div style="margin-bottom: 8px; display: flex; gap: 6px; align-items: center">
+                <span style="font-size: 11.5px; color: var(--dim)">类型</span>
+                <select
+                  class="bodytype"
+                  :value="draft.body.type"
+                  @change="setBodyType(($event.target as HTMLSelectElement).value as Body['type'])"
+                >
+                  <option v-for="t in BODY_TYPES" :key="t" :value="t">{{ t }}</option>
+                </select>
+              </div>
+              <div v-if="draft.body.type === 'none'" style="color: var(--dim); font-size: 12px">
+                此请求无请求体
+              </div>
+              <CodeEditor
+                v-else
+                :value="draft.body.text ?? ''"
+                :language="draft.body.type === 'json' ? 'json' : 'text'"
+                @update:value="setBodyText"
+              />
+            </template>
+            <AuthEditor
+              v-else-if="store.state.builderTab === 'Auth'"
+              :auth="draft.auth"
+              @update:auth="draft.auth = $event"
+            />
+            <AssertionEditor
+              v-else-if="store.state.builderTab === '断言'"
+              :assertions="draft.assert"
+              @update:assertions="draft.assert = $event"
+            />
           </div>
-          <div v-if="draft.body.type === 'none'" style="color: var(--dim); font-size: 12px">
-            此请求无请求体
-          </div>
-          <CodeEditor
-            v-else
-            :value="draft.body.text ?? ''"
-            :language="draft.body.type === 'json' ? 'json' : 'text'"
-            @update:value="setBodyText"
-          />
-        </template>
-        <AuthEditor
-          v-else-if="store.state.builderTab === 'Auth'"
-          :auth="draft.auth"
-          @update:auth="draft.auth = $event"
-        />
-        <AssertionEditor
-          v-else-if="store.state.builderTab === '断言'"
-          :assertions="draft.assert"
-          @update:assertions="draft.assert = $event"
-        />
+        </Transition>
       </div>
       <div style="padding: 8px 16px; display: flex; gap: 8px">
         <button class="btn primary" data-action="save" @click="store.saveDraft()">保存</button>

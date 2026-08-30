@@ -12,6 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    css: true,
     include: ["src/**/__tests__/**/*.spec.ts"],
   },
 });
