@@ -72,6 +72,10 @@ export function createHttpServices(deps: HttpDeps = {}): ApiServices {
     getEnvironment: (name) => get<EnvironmentData>(`/environments/${encodeURIComponent(name)}`),
     putEnvironment: (name, vars) =>
       put<EnvironmentData>(`/environments/${encodeURIComponent(name)}`, { vars }),
+    putEnvironmentSecrets: (name, secrets) =>
+      put<EnvironmentData>(`/environments/${encodeURIComponent(name)}/secrets`, { secrets }),
+    deleteEnvironment: (name) =>
+      del(`/environments/${encodeURIComponent(name)}`).then(() => undefined),
     getActiveEnvironment: async () =>
       (await get<{ active_environment: string | null }>("/state")).active_environment,
     setActiveEnvironment: async (name) => {

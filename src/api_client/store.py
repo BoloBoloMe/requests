@@ -406,6 +406,19 @@ class Store:
         """写 secrets 文件 (gitignored, M2 D006); .gitignore 规则属 ISSUE-06."""
         self._write_vars_file(self._env_path(name, secrets=True), secrets)
 
+    def delete_environment(self, name: str) -> None:
+        """删除环境 (G2): 主 vars 文件不存在则 404; secrets 一并清理;
+        若为激活环境则同时清空激活状态 (state 归 None)."""
+        path = self._env_path(name)
+        if not path.is_file():
+            raise NotFoundError(f"环境不存在: {name}")
+        path.unlink()
+        secrets_path = self._env_path(name, secrets=True)
+        if secrets_path.is_file():
+            secrets_path.unlink()
+        if self.get_active_environment() == name:
+            self.set_active_environment(None)
+
     # --- 激活环境状态 (M2 D007) ---
 
     def _state_path(self) -> Path:

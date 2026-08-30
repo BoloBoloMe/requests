@@ -206,6 +206,15 @@ export function createMockServices(seed: MockSeed): ApiServices {
       envs[name] = { ...(envs[name] ?? {}), vars: { ...vars } };
       return this.getEnvironment(name);
     },
+    async putEnvironmentSecrets(name: string, secrets: Record<string, string>) {
+      envs[name] = { ...(envs[name] ?? {}), secrets: { ...secrets } };
+      return this.getEnvironment(name);
+    },
+    async deleteEnvironment(name: string): Promise<void> {
+      if (!(name in envs)) throw new Error(`环境不存在: ${name}`);
+      delete envs[name];
+      if (activeEnv === name) activeEnv = null;
+    },
     async getActiveEnvironment() {
       return activeEnv;
     },

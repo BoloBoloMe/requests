@@ -184,6 +184,13 @@ export interface ApiServices {
     name: string,
     vars: Record<string, string>,
   ): Promise<EnvironmentData>;
+  /** 写环境 secrets (gitignored 单独文件, M2 D006) */
+  putEnvironmentSecrets(
+    name: string,
+    secrets: Record<string, string>,
+  ): Promise<EnvironmentData>;
+  /** 删除环境 (vars+secrets 一并清理; 激活态若是它则归空) */
+  deleteEnvironment(name: string): Promise<void>;
   getActiveEnvironment(): Promise<string | null>;
   setActiveEnvironment(name: string | null): Promise<void>;
   /** 执行事件流 (SSE/NDJSON 消费已被适配层统一为异步迭代) */

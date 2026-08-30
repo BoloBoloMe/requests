@@ -160,6 +160,15 @@ def create_crud_router(store: Store, require_token) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from None
         return {"name": name, "secrets": secrets}
 
+    @router.delete("/environments/{name}", status_code=204)
+    async def delete_environment(name: str) -> Response:
+        # 删除环境 (G2): 主 vars + secrets 一并清理; 激活态若是它则归空
+        try:
+            store.delete_environment(name)
+        except NotFoundError:
+            raise HTTPException(status_code=404, detail="环境不存在") from None
+        return Response(status_code=204)
+
     @router.get("/state")
     async def get_state() -> dict:
         return {"active_environment": store.get_active_environment()}

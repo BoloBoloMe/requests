@@ -321,6 +321,50 @@ export function createAppStore(services: ApiServices) {
     state.envVars = name ? (await services.getEnvironment(name)).merged : {};
   }
 
+  /** --- G2 环境管理 (CRUD + 激活切换, 数据仍落 environments/*.yaml) --- */
+
+  async function refreshEnvs(): Promise<void> {
+    state.envs = await services.listEnvironments();
+  }
+
+  /** 新建环境 (空 vars); 重名直接覆盖写 (PUT 即 upsert) */
+  async function createEnvironment(name: string): Promise<void> {
+    await services.putEnvironment(name, {});
+    await refreshEnvs();
+  }
+
+  /** 保存环境 vars 与 secrets (整体替换写); 若改名则迁移文件并联动激活态 */
+  async function saveEnvironment(
+    name: string,
+    vars: Record<string, string>,
+    secrets: Record<string, string>,
+    newName?: string,
+  ): Promise<void> {
+    const target = newName && newName !== name ? newName : name;
+    await services.putEnvironment(target, vars);
+    await services.putEnvironmentSecrets(target, secrets);
+    if (target !== name) {
+      // 改名 = 写新 + 删旧; 激活态若指旧名则迁到新名
+      const wasActive = state.activeEnv === name;
+      await services.deleteEnvironment(name);
+      await refreshEnvs();
+      if (wasActive) await setActiveEnv(target);
+      return;
+    }
+    await refreshEnvs();
+    if (state.activeEnv === target) state.envVars = { ...vars, ...secrets };
+  }
+
+  /** 删除环境; 若为激活环境则后端自动清空激活态, 本地同步归空 */
+  async function removeEnvironment(name: string): Promise<void> {
+    await services.deleteEnvironment(name);
+    await refreshEnvs();
+    if (state.activeEnv === name) {
+      state.activeEnv = null;
+      state.envVars = {};
+    }
+  }
+
   /** 新建请求条目 (进指定文件夹, 缺省集合根); slug 由名称派生去重 */
   async function createItem(folder: string): Promise<ItemEntry> {
     if (!state.collection || !state.root) throw new Error("未选择集合");
@@ -403,6 +447,10 @@ export function createAppStore(services: ApiServices) {
     jumpToFailure,
     syncGit,
     setActiveEnv,
+    refreshEnvs,
+    createEnvironment,
+    saveEnvironment,
+    removeEnvironment,
     createItem,
     deleteItem,
     renameItem,

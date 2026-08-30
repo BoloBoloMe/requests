@@ -228,3 +228,29 @@ def test_missing_resources_404(client):
     assert client.get("/collections/ghost/items", headers={**HOST, **AUTH}).status_code == 404
     assert client.get("/environments/ghost", headers={**HOST, **AUTH}).status_code == 404
     assert client.delete("/collections/ghost/items/x", headers={**HOST, **AUTH}).status_code == 404
+
+
+# --- G2: 环境删除端点 (vars+secrets 清理, 激活态联动) ---
+
+
+def test_delete_environment(client, tmp_path):
+    client.put("/environments/dev", json={"vars": {"host": "http://dev"}}, headers={**HOST, **AUTH})
+    client.put("/environments/dev/secrets", json={"secrets": {"token": "s"}}, headers={**HOST, **AUTH})
+    assert client.delete("/environments/dev", headers={**HOST, **AUTH}).status_code == 204
+    # 主文件与 secrets 均清理, 列表归空
+    assert client.get("/environments", headers={**HOST, **AUTH}).json() == {"environments": []}
+    assert client.get("/environments/dev", headers={**HOST, **AUTH}).status_code == 404
+    assert not (tmp_path / "repo" / "environments" / "dev.yaml").exists()
+    assert not (tmp_path / "repo" / "environments" / "dev.secrets.yaml").exists()
+    # 重复删除 404
+    assert client.delete("/environments/dev", headers={**HOST, **AUTH}).status_code == 404
+
+
+def test_delete_active_environment_clears_state(client):
+    client.put("/environments/dev", json={"vars": {"host": "http://dev"}}, headers={**HOST, **AUTH})
+    client.put("/state", json={"active_environment": "dev"}, headers={**HOST, **AUTH})
+    client.put("/environments/other", json={"vars": {}}, headers={**HOST, **AUTH})
+    assert client.delete("/environments/dev", headers={**HOST, **AUTH}).status_code == 204
+    # 激活态随删除归空, 其他环境不受影响
+    assert client.get("/state", headers={**HOST, **AUTH}).json() == {"active_environment": None}
+    assert client.get("/environments", headers={**HOST, **AUTH}).json()["environments"] == ["other"]
