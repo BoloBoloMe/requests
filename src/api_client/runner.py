@@ -3,7 +3,9 @@
 顺序执行 (M3 D013, v1 不并发): 逐条复用 Engine 完整事件流 (meta/chunk/done,
 不吞 chunk, M4 D003), 断言失败不中断后续条目; 单条目意外异常 (如未知认证类型)
 隔离为该条失败 (status=null + error.code=UNEXPECTED_ERROR), 不中断整批 (D-AFK-009);
-末尾发 summary.
+未解析变量条目跳过 (G1): 不发 HTTP, 合成 done (status=null +
+error.code=UNRESOLVED_VARIABLES), 计入 summary failed 与 JUnit errors,
+其余条目照常 (M4 D006 硬失败仅留给 send); 末尾发 summary.
 统计口径: passed/failed 按断言 ok 计数 (done.status 为 int 且非 assert_failed
 即 passed; 断言失败或传输失败计 failed, ISSUE-10 CLI 消费 summary 同口径).
 JUnit 报告为输出物, 手写最小 XML (xml.etree), 不入数据仓库 (M2 D011).
@@ -18,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .engine import Engine
-from .resolve import build_request
+from .resolve import UnresolvedVariablesError, build_request
 from .store import Item, Store
 
 
@@ -51,7 +53,7 @@ class Run:
         engine: Engine,
         collection: str,
         env_name: str | None,
-        prepared: list[tuple[str, Item, Any]],
+        prepared: list[tuple[str, Item, Any, list[str] | None]],
     ) -> None:
         self._engine = engine
         self._collection = collection
@@ -64,8 +66,37 @@ class Run:
 
     async def _stream(self) -> AsyncIterator[dict]:
         # 顺序遍历 (D013): 逐条排干 Engine 完整事件流 (不吞 chunk, M4 D003)
-        for slug, item, resolved in self._prepared:
+        for slug, item, resolved, missing in self._prepared:
             item_ref = f"{self._collection}/{slug}"
+            if resolved is None:
+                # 未解析变量条目跳过 (G1, M4 D006 仅留给 send): 不发 HTTP,
+                # 合成失败 done (status=null + error.code=UNRESOLVED_VARIABLES),
+                # 保住 每条目必有 done 的事件流不变式; 计入 summary/JUnit
+                done = {
+                    "type": "done",
+                    "timestamp": _now_iso(),
+                    "item": item_ref,
+                    "status": None,
+                    "duration_ms": 0,
+                    "assertions": [],
+                    "error": {
+                        "code": "UNRESOLVED_VARIABLES",
+                        "message": f"未解析变量: {', '.join(missing or [])}",
+                    },
+                }
+                yield done
+                self.results.append(
+                    RunResult(
+                        item=item_ref,
+                        name=item.name,
+                        classname=self._collection,
+                        status=None,
+                        duration_ms=0,
+                        assertions=[],
+                        error=done["error"],
+                    )
+                )
+                continue
             done: dict | None = None
             try:
                 async for event in self._engine.execute(
@@ -135,8 +166,10 @@ def run_collection(
 ) -> Run:
     """急切完成 集合/环境/条目读取与变量解析后返回 Run 句柄.
 
-    NotFoundError (集合/环境不存在) 与 UnresolvedVariablesError 在调用点同步抛出,
-    事件流尚未开始 (M4 D006: 未解析变量硬失败, 不产生事件流); 壳层归 404/422.
+    NotFoundError (集合/环境不存在) 在调用点同步抛出, 事件流尚未开始,
+    壳层归 404. 未解析变量条目不再整批硬失败 (G1): 逐条捕获
+    UnresolvedVariablesError, 该条目标记跳过 (resolved=None + missing),
+    由 Run._stream 合成失败 done; send 单条仍硬失败 exit 2 (M4 D006).
     env_name 缺省读激活环境 (M2 D007).
     vars 为调用方一次性覆盖层 (D-AFK-011), 透传 build_request, 优先级最高.
     """
@@ -144,10 +177,14 @@ def run_collection(
     if env_name is None:
         env_name = store.get_active_environment()
     env = store.read_environment(env_name) if env_name is not None else None
-    prepared = [
-        (entry.slug, entry.item, build_request(entry.item, env, config, vars=vars))
-        for entry in store.list_items(collection)
-    ]
+    prepared: list[tuple[str, Item, Any, list[str] | None]] = []
+    for entry in store.list_items(collection):
+        try:
+            resolved = build_request(entry.item, env, config, vars=vars)
+            missing: list[str] | None = None
+        except UnresolvedVariablesError as exc:
+            resolved, missing = None, exc.missing
+        prepared.append((entry.slug, entry.item, resolved, missing))
     return Run(engine, collection, env_name, prepared)
 
 

@@ -92,8 +92,10 @@ collection-ref 为集合名, 例: demo.
 ## 变量与未解析变量
 
 --var KEY=VALUE 覆盖环境变量, 可重复, send/run 均可用; 优先于环境变量.
-变量替换后 URL/headers/body 仍残留 {{{{NAME}}}} 占位符 -> exit 2
-UNRESOLVED_VARIABLES, 且不产生事件流 (硬失败).
+变量替换后 URL/headers/body 仍残留 {{{{NAME}}}} 占位符:
+send 单条 -> exit 2 UNRESOLVED_VARIABLES, 不产生事件流 (硬失败);
+run 整批 -> 该条目跳过 (不发 HTTP, 合成 done 含 error.code=UNRESOLVED_VARIABLES,
+计入 summary failed 与 JUnit errors), 其余条目照常, 整批 exit 1.
 动态变量 {{{{$now}}}} / {{{{$uuid}}}} 由引擎在运行时求值, 不视为未解析.
 """
 

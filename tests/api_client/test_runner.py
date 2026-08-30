@@ -479,3 +479,126 @@ def test_run_requires_token_401(tmp_path):
     client = TestClient(create_app(TOKEN, data_dir=tmp_path))
     response = client.post("/collections/demo/run", headers={"Host": "localhost"})
     assert response.status_code == 401
+
+
+# --- G1: 未解析变量条目跳过 (不再整批 exit 2; send 单条硬失败不变) ---
+
+
+def _write_skip_collection(data_dir, testbed_url) -> None:
+    """echo (通过) / unresolved (URL 残留 {{nope}}, 跳过) / missing (断言失败)."""
+    store = Store(data_dir)
+    store.write_item(
+        "demo",
+        "echo",
+        Item(
+            name="echo",
+            method="GET",
+            url=f"{testbed_url}/echo?hello=world",
+            seq=1,
+            assertions=[{"target": "status", "op": "eq", "expect": 200}],
+        ),
+    )
+    store.write_item(
+        "demo",
+        "unresolved",
+        Item(
+            name="unresolved",
+            method="GET",
+            url=f"{testbed_url}/echo?x={{{{nope}}}}",
+            seq=2,
+            assertions=[{"target": "status", "op": "eq", "expect": 200}],
+        ),
+    )
+    store.write_item(
+        "demo",
+        "missing",
+        Item(
+            name="missing",
+            method="GET",
+            url=f"{testbed_url}/status/404",
+            seq=3,
+            assertions=[{"target": "status", "op": "eq", "expect": 200}],
+        ),
+    )
+
+
+def test_runner_unresolved_item_skipped_not_fatal(tmp_path, testbed_url):
+    """G1: 未解析变量条目跳过 (无 meta/chunk, 合成 done status=null +
+    error.code=UNRESOLVED_VARIABLES), 其余条目照常; summary total=3
+    passed=1 failed=2; JUnit errors 计该条目."""
+    _write_skip_collection(tmp_path, testbed_url)
+    store = Store(tmp_path)
+    run = run_collection(store, Engine(store), "demo")
+    events = _collect(run)
+
+    # 事件序: echo 完整 meta/chunk/done, unresolved 仅 done, missing 完整三事件
+    assert [e["type"] for e in events] == [
+        "meta", "chunk", "done",  # echo
+        "done",  # unresolved (跳过, 不发 HTTP)
+        "meta", "chunk", "done",  # missing
+        "summary",
+    ]
+    skipped = events[3]
+    assert skipped["item"] == "demo/unresolved"
+    assert skipped["status"] is None
+    assert skipped["duration_ms"] == 0
+    assert skipped["assertions"] == []
+    assert skipped["error"]["code"] == "UNRESOLVED_VARIABLES"
+    assert "nope" in skipped["error"]["message"]
+
+    summary = events[-1]
+    assert (summary["total"], summary["passed"], summary["failed"]) == (3, 1, 2)
+    assert summary["items"][1] == {
+        "item": "demo/unresolved",
+        "status": None,
+        "passed": False,
+    }
+
+    # JUnit: skipped 计入 errors (status=None 口径), missing 计入 failures
+    root = ET.fromstring(junit_xml(run.results, suite_name="demo"))
+    assert root.get("tests") == "3"
+    assert root.get("failures") == "1"
+    assert root.get("errors") == "1"
+    cases = root.findall("testcase")
+    assert [c.get("name") for c in cases] == ["echo", "unresolved", "missing"]
+    assert cases[1].find("error") is not None
+
+
+def test_run_api_unresolved_item_returns_200_stream(tmp_path, testbed_url):
+    """G1 API 面: 未解析变量条目不再 422 整批硬失败, 200 出流 (CLI exit 1
+    由 event_failed 对 done.error/summary.failed 自动生效)."""
+    _write_skip_collection(tmp_path, testbed_url)
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/collections/demo/run",
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+    assert events[-2]["type"] == "summary"
+    assert (events[-2]["total"], events[-2]["failed"]) == (3, 2)
+    skipped = [e for e in events if e.get("error", {}).get("code") == "UNRESOLVED_VARIABLES"]
+    assert len(skipped) == 1 and skipped[0]["item"] == "demo/unresolved"
+    # report 仍正常收尾 (跳过不中断整批)
+    assert events[-1]["type"] == "report"
+
+
+def test_run_all_unresolved_items_still_streams(tmp_path, testbed_url):
+    """G1 边界: 全部条目未解析 -> 仍出事件流 (每条目一个 done) + summary/report,
+    不 422 (整批跳过语义, 非硬失败)."""
+    store = Store(tmp_path)
+    store.write_item(
+        "demo",
+        "bad",
+        Item(name="bad", method="GET", url="{{nope}}/x", seq=1, assertions=[]),
+    )
+    client = TestClient(create_app(TOKEN, data_dir=tmp_path))
+    response = client.post(
+        "/collections/demo/run",
+        headers={**_auth(), "Accept": "application/x-ndjson"},
+    )
+    assert response.status_code == 200
+    events = [json.loads(line) for line in response.text.splitlines() if line.strip()]
+    assert [e["type"] for e in events] == ["done", "summary", "report"]
+    assert events[0]["error"]["code"] == "UNRESOLVED_VARIABLES"
+    assert events[1]["failed"] == 1

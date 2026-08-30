@@ -42,7 +42,8 @@ def create_run_router(store: Store, require_token) -> APIRouter:
             env = body_env
         vars_override = _parse_vars(payload["vars"]) if "vars" in payload else None
 
-        # 急切读: 集合/环境不存在 404, 未解析变量 422 (事件流尚未开始, M4 D006)
+        # 急切读: 集合/环境不存在 404 (事件流尚未开始). 未解析变量已改为逐条跳过
+        # (G1, runner 合成失败 done); 此 422 分支保留为防御 (如未来 vars 校验前置)
         try:
             batch = run_collection(store, engine, collection, env_name=env, vars=vars_override)
         except NotFoundError as exc:
