@@ -34,6 +34,14 @@ export interface ItemRunResult {
   firstFailure?: { index: number; result: AssertionResult };
 }
 
+/** 单条目运行回看数据 (G3): run 事件流累积的 meta/bodyText/done, 点条目时注入响应面板 */
+export interface ItemRunView {
+  meta: MetaEvent | null;
+  bodyText: string;
+  bodyBytes: number;
+  done: DoneEvent | null;
+}
+
 export interface AppState {
   collections: string[];
   /** 当前集合名 */
@@ -68,6 +76,10 @@ export interface AppState {
   responseTab: string;
   /** runner 内联: 条目 slug → 运行结果 (ISSUE-05, 事件 item 为 collection/slug) */
   runResults: Record<string, ItemRunResult>;
+  /** runner 回看缓存 (G3): 条目 slug → 该次运行 meta/bodyText/done; 换集合/重新 run 清空 */
+  runViews: Record<string, ItemRunView>;
+  /** 响应面板当前展示是否来自 run 回看 (而非 send); 点条目/重新发送后归位 */
+  runViewing: boolean;
   /** 批量运行进行中 (并发保护: 重复触发被忽略) */
   running: boolean;
   /** 当前运行的收尾 promise (测试与 UI 等待用) */
@@ -93,6 +105,8 @@ export function createAppStore(services: ApiServices) {
     response: null,
     responseTab: "Body",
     runResults: {},
+    runViews: {},
+    runViewing: false,
     running: false,
     runDone: null,
     git: { state: "dirty", error: null },
@@ -137,6 +151,8 @@ export function createAppStore(services: ApiServices) {
     state.response = null;
     state.responseTab = "Body";
     state.runResults = {};
+    state.runViews = {};
+    state.runViewing = false;
     state.assertionHighlight = null;
     state.builderTab = "Params";
     state.sending = false;
@@ -187,10 +203,13 @@ export function createAppStore(services: ApiServices) {
     if (!state.collection) return;
     state.selected = { collection: state.collection, slug: entry.slug, folder: entry.folder };
     // 选中即装载草稿 (树点击/新建统一走此路径); 并发与切换竞态由 loadDraft 守卫吸收
+    // G3: 若该条目有 run 回看缓存, 点选即注入响应面板 (与草稿装载并行不悖)
+    viewRunResult(entry.slug);
     void loadDraft();
   }
 
-  /** 装载选中条目到草稿 (构建器数据源); 换条目时清空响应面板 */
+  /** 装载选中条目到草稿 (构建器数据源); 换条目时清空响应面板
+   *  (G3 回看态例外: viewRunResult 已按 slug 注入或清空, 此处不覆盖) */
   async function loadDraft(): Promise<void> {
     if (!state.selected) {
       state.draft = null;
@@ -202,8 +221,10 @@ export function createAppStore(services: ApiServices) {
     const cur = state.selected;
     if (!cur || cur.collection !== collection || cur.slug !== slug || cur.folder !== folder) return;
     state.draft = draft;
-    state.response = null;
-    state.responseTab = "Body";
+    if (!state.runViewing) {
+      state.response = null;
+      state.responseTab = "Body";
+    }
   }
 
   /** 草稿写回适配层 (PUT 即 upsert, D010); 先取纯快照避免 reactive 代理过不了传输/克隆边界 */
@@ -222,26 +243,42 @@ export function createAppStore(services: ApiServices) {
     }
   }
 
-  /** 文件夹/集合批量运行 (RUN-01): 消费 run 事件流驱动树徽标与红字明细 */
+  /** 文件夹/集合批量运行 (RUN-01): 消费 run 事件流驱动树徽标与红字明细;
+   *  同时按 slug 缓存每条目 meta/chunk 累积/done 供回看 (G3). */
   function run(): void {
     if (!state.collection || state.running) return;
     const collection = state.collection;
     state.running = true;
     state.runResults = {};
+    state.runViews = {};
+    state.runViewing = false;
+    const encoder = new TextEncoder();
     state.runDone = (async () => {
       try {
         for await (const event of services.runCollection(collection, state.activeEnv)) {
           if (event.type === "meta") {
-            state.runResults[slugOf(event.item)] = { status: "running" };
+            const slug = slugOf(event.item);
+            state.runResults[slug] = { status: "running" };
+            state.runViews[slug] = { meta: event, bodyText: "", bodyBytes: 0, done: null };
+          } else if (event.type === "chunk") {
+            const view = state.runViews[slugOf(event.item)];
+            if (view) {
+              view.bodyText += event.data;
+              view.bodyBytes += encoder.encode(event.data).length;
+            }
           } else if (event.type === "done") {
+            const slug = slugOf(event.item);
             const failedIndex = event.assertions.findIndex((a) => !a.ok);
-            state.runResults[slugOf(event.item)] = {
+            state.runResults[slug] = {
               // 三态口径: 仅 HTTP 码落地且断言全过计 passed (与后端 summary 一致)
               status: typeof event.status === "number" ? "passed" : "failed",
               ...(failedIndex >= 0
                 ? { firstFailure: { index: failedIndex, result: event.assertions[failedIndex] } }
                 : {}),
             };
+            const view = state.runViews[slug];
+            if (view) view.done = event;
+            else state.runViews[slug] = { meta: null, bodyText: "", bodyBytes: 0, done: event };
           }
           // summary/report 事件不驱动树 UI (报告输出物不落盘, M3)
         }
@@ -249,6 +286,32 @@ export function createAppStore(services: ApiServices) {
         state.running = false;
       }
     })();
+  }
+
+  /** 点条目回看该次运行结果 (G3): 若该 slug 有 run 缓存则注入响应面板;
+   *  无缓存则清空面板 (回看态解除). 与 send 互不污染: send 写 response 时
+   *  置 runViewing=false, 本函数置 true. */
+  function viewRunResult(slug: string): void {
+    // 同 slug 且面板已是它的回看: 幂等; 判据用注入标记而非 selected (点击时 selected 已更新)
+    if (state.runViewing && state.response?.meta?.item?.endsWith(`/${slug}`)) return;
+    const view = state.runViews[slug];
+    if (!view) {
+      if (state.runViewing) {
+        state.response = null;
+        state.responseTab = "Body";
+        state.runViewing = false;
+      }
+      return;
+    }
+    state.response = {
+      meta: view.meta,
+      bodyText: view.bodyText,
+      bodyBytes: view.bodyBytes,
+      done: view.done,
+      history: null,
+    };
+    state.responseTab = "Body";
+    state.runViewing = true;
   }
 
   /** 失败红字跳转: 选中条目 + 装载草稿 + 断言 tab + 定位失败行 (RUN-01/ISSUE-03 联动) */
@@ -281,6 +344,7 @@ export function createAppStore(services: ApiServices) {
     state.sending = true;
     state.response = { meta: null, bodyText: "", bodyBytes: 0, done: null, history: null };
     state.responseTab = "Body";
+    state.runViewing = false;
     const encoder = new TextEncoder();
     try {
       // 发送以当前草稿为准 (编辑即所发): 先落盘再执行, 避免发出的是旧存储版本
@@ -444,6 +508,7 @@ export function createAppStore(services: ApiServices) {
     saveDraft,
     send,
     run,
+    viewRunResult,
     jumpToFailure,
     syncGit,
     setActiveEnv,

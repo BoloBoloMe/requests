@@ -1112,3 +1112,12 @@ body {
   border-color: var(--bad);
   background: #fdf6f4;
 }
+
+/* 运行回看标识 (G3): 响应面板顶部提示该数据来自集合运行而非单次发送 */
+.vb .runview-note {
+  font-size: 11px;
+  color: var(--dim);
+  padding: 3px 12px;
+  border-bottom: 1px dashed var(--bd);
+  background: #faf9f6;
+}

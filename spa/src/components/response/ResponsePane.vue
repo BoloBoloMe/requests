@@ -54,6 +54,9 @@ const showTabs = computed(() => resp.value?.done != null);
     <div v-else class="r-hd">
       <span class="dim" style="font-size: 12px">尚未发送 — 点「发送」或从树上 ▶ 运行</span>
     </div>
+    <div v-if="showTabs && store.state.runViewing" class="runview-note">
+      ⏱ 运行回看 — 来自最近一次集合运行{{ resp?.done ? ` · ${new Date(resp.done.timestamp).toTimeString().slice(0, 8)}` : "" }}
+    </div>
     <div v-if="showTabs" class="tabs">
       <span
         v-for="tab in TABS"
