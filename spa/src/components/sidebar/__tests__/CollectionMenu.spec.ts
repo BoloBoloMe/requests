@@ -138,6 +138,39 @@ describe("集合菜单", () => {
   });
 });
 
+describe("G5: 点击外部收起", () => {
+  // click-outside 监听器在宏任务注册, 触发外部点击前先让出宏任务
+  function flushMacrotask() {
+    return new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("TC-110: 点击下拉外部自动收起", async () => {
+    const { wrapper } = await mountMenu();
+    await wrapper.find(".name").trigger("click");
+    expect(wrapper.find(".collmenu").exists()).toBe(true);
+    await flushMacrotask();
+    document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(wrapper.find(".collmenu").exists()).toBe(false));
+  });
+
+  it("TC-111: 点击下拉内部不自动收起", async () => {
+    const { wrapper } = await mountMenu();
+    await wrapper.find(".name").trigger("click");
+    expect(wrapper.find(".collmenu").exists()).toBe(true);
+    await wrapper.find(".envmenu").trigger("click");
+    expect(wrapper.find(".collmenu").exists()).toBe(true);
+  });
+
+  it("TC-112: 点击触发按钮本身按原语义切换, 不被误判为外部", async () => {
+    const { wrapper } = await mountMenu();
+    await wrapper.find(".name").trigger("click");
+    expect(wrapper.find(".collmenu").exists()).toBe(true);
+    // 再次点击触发按钮：原语义是收起
+    await wrapper.find(".name").trigger("click");
+    expect(wrapper.find(".collmenu").exists()).toBe(false);
+  });
+});
+
 describe("空集合状态", () => {
   it("TC-109: 无集合时侧栏显示引导, 新建请求按钮禁用不抛错", async () => {
     const services = createMockServices({ collections: {} });

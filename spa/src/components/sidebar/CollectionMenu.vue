@@ -3,10 +3,18 @@
 // (隐式建集合: store.createCollection 经适配层写默认配置, 后端自动建目录)
 // G4: 下拉显隐加 pop 过渡
 import { ref } from "vue";
+import { useClickOutside } from "../../composables/useClickOutside";
 import { useStore } from "../../stores/app";
 
 const store = useStore();
 const open = ref(false);
+const nameRef = ref<HTMLElement | null>(null);
+const menuRef = ref<HTMLElement | null>(null);
+
+useClickOutside(menuRef, () => {
+  open.value = false;
+}, { ignore: [nameRef] });
+
 const creating = ref(false);
 /** 提交中标记: 防 Enter/点击重复提交 */
 const submitting = ref(false);
@@ -51,12 +59,12 @@ function cancelCreate(): void {
 </script>
 
 <template>
-  <div class="name" @click="open = !open">
+  <div ref="nameRef" class="name" @click="open = !open">
     <span>{{ store.state.collection ?? "api-client" }}</span>
     <span class="caret">▾</span>
   </div>
   <Transition name="pop">
-    <div v-if="open" class="envmenu collmenu">
+    <div v-if="open" ref="menuRef" class="envmenu collmenu">
     <div
       v-for="name in store.state.collections"
       :key="name"

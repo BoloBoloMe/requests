@@ -1,12 +1,16 @@
 <script setup lang="ts">
 // 集合变量编辑器 (M5 决策 3): kv 表加行/删行/改, 保存经适配层写 _collection.yaml
 import { ref } from "vue";
+import { useClickOutside } from "../../composables/useClickOutside";
 import { useServices } from "../../services";
 import { useStore } from "../../stores/app";
 
 const emit = defineEmits<{ close: [] }>();
 const store = useStore();
 const services = useServices();
+const modalRef = ref<HTMLElement | null>(null);
+
+useClickOutside(modalRef, () => emit("close"));
 
 interface Row {
   key: string;
@@ -45,7 +49,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <div class="varmodal">
+  <div ref="modalRef" class="varmodal">
     <div style="font-weight: 600; font-size: 12.5px; margin-bottom: 6px">集合变量</div>
     <div v-for="(row, i) in rows" :key="i" class="kv">
       <input v-model="row.key" placeholder="key" />

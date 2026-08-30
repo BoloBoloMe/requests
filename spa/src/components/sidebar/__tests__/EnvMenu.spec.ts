@@ -1,7 +1,7 @@
 // TS-002 (ISSUE-02): 环境胶囊下拉切换
 // 接缝: EnvMenu 组件 + 全局环境状态 (store)
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMockServices, presetBilling } from "../../../services/mock";
 import { SERVICES_KEY } from "../../../services";
 import { createAppStore, STORE_KEY } from "../../../stores/app";
@@ -40,5 +40,37 @@ describe("环境胶囊", () => {
     expect(wrapper.find(".envmenu").exists()).toBe(false);
     // 变量视图随环境刷新 (供 URL 解析预览, ISSUE-03)
     expect(store.state.envVars.host).toBe("api.staging.example.com");
+  });
+});
+
+describe("G5: 点击外部收起", () => {
+  // click-outside 监听器在宏任务注册, 触发外部点击前先让出宏任务
+  function flushMacrotask() {
+    return new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("TC-012: 点击下拉外部自动收起", async () => {
+    const { wrapper } = await mountEnvMenu();
+    await wrapper.find(".env").trigger("click");
+    expect(wrapper.find(".envmenu").exists()).toBe(true);
+    await flushMacrotask();
+    document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(wrapper.find(".envmenu").exists()).toBe(false));
+  });
+
+  it("TC-013: 点击下拉内部不自动收起", async () => {
+    const { wrapper } = await mountEnvMenu();
+    await wrapper.find(".env").trigger("click");
+    expect(wrapper.find(".envmenu").exists()).toBe(true);
+    await wrapper.find(".envmenu").trigger("click");
+    expect(wrapper.find(".envmenu").exists()).toBe(true);
+  });
+
+  it("TC-014: 管理环境入口打开弹层时父下拉已收起, 状态不错乱", async () => {
+    const { wrapper } = await mountEnvMenu();
+    await wrapper.find(".env").trigger("click");
+    await wrapper.find("[data-manage-env]").trigger("click");
+    expect(wrapper.find(".envmenu").exists()).toBe(false);
+    expect(wrapper.find(".enveditor").exists()).toBe(true);
   });
 });

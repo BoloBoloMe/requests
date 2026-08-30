@@ -65,3 +65,32 @@ describe("集合变量编辑", () => {
     expect(config.vars).toEqual({ host: "api.example.com" });
   });
 });
+
+describe("G5: 点击外部收起", () => {
+  // click-outside 监听器在宏任务注册, 触发外部点击前先让出宏任务
+  function flushMacrotask() {
+    return new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("TC-009: 点击弹层外部触发 close", async () => {
+    const { wrapper } = await mountVarEditor();
+    await flushMacrotask();
+    expect(wrapper.emitted("close")).toBeUndefined();
+    document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(wrapper.emitted("close")).toHaveLength(1));
+  });
+
+  it("TC-010: 点击弹层内部输入框不触发 close", async () => {
+    const { wrapper } = await mountVarEditor();
+    await flushMacrotask();
+    await wrapper.find("input").trigger("click");
+    expect(wrapper.emitted("close")).toBeUndefined();
+  });
+
+  it("TC-011: 点击取消按钮仅由按钮自身逻辑关闭, 不与外部监听冲突", async () => {
+    const { wrapper } = await mountVarEditor();
+    await flushMacrotask();
+    await wrapper.find(".btn:not(.primary)").trigger("click");
+    expect(wrapper.emitted("close")).toHaveLength(1);
+  });
+});

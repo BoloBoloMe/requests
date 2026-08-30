@@ -2,6 +2,7 @@
 // 环境管理弹层 (G2): 列表/新建/改名/编辑 vars+secrets/删除/设为激活
 // 数据仍落 environments/*.yaml (+ .secrets.yaml, gitignored), 经适配层 CRUD.
 import { ref, watch } from "vue";
+import { useClickOutside } from "../../composables/useClickOutside";
 import { useServices } from "../../services";
 import { useStore } from "../../stores/app";
 import type { EnvironmentData } from "../../services/types";
@@ -9,6 +10,9 @@ import type { EnvironmentData } from "../../services/types";
 const emit = defineEmits<{ close: [] }>();
 const store = useStore();
 const services = useServices();
+const editorRef = ref<HTMLElement | null>(null);
+
+useClickOutside(editorRef, () => emit("close"));
 
 interface Row {
   key: string;
@@ -151,7 +155,7 @@ async function activate(): Promise<void> {
 </script>
 
 <template>
-  <div class="enveditor" @click.stop>
+  <div ref="editorRef" class="enveditor" @click.stop>
     <div class="ee-head">
       <span>环境管理</span>
       <span class="x" data-env-close @click="emit('close')">×</span>

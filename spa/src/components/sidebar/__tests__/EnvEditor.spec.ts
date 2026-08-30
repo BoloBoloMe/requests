@@ -110,3 +110,32 @@ describe("环境管理弹层", () => {
     expect(store.state.envVars.host).toBe("api.staging.example.com");
   });
 });
+
+describe("G5: 点击外部收起", () => {
+  // click-outside 监听器在宏任务注册, 触发外部点击前先让出宏任务
+  function flushMacrotask() {
+    return new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("TC-015: 点击弹层外部触发 close", async () => {
+    const { wrapper } = await openEditor();
+    await flushMacrotask();
+    expect(wrapper.find(".enveditor").exists()).toBe(true);
+    document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(wrapper.find(".enveditor").exists()).toBe(false));
+  });
+
+  it("TC-016: 点击弹层内部输入框不触发 close", async () => {
+    const { wrapper } = await openEditor();
+    await flushMacrotask();
+    await wrapper.find("[data-env-name]").trigger("click");
+    expect(wrapper.find(".enveditor").exists()).toBe(true);
+  });
+
+  it("TC-017: 点击取消按钮仅由按钮自身逻辑关闭, 不与外部监听冲突", async () => {
+    const { wrapper } = await openEditor();
+    await flushMacrotask();
+    await wrapper.find("[data-env-cancel]").trigger("click");
+    expect(wrapper.find(".enveditor").exists()).toBe(false);
+  });
+});
