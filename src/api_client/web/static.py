@@ -31,10 +31,16 @@ def _latest_mtime(directory: Path) -> float | None:
     return max(mtimes, default=None)
 
 
-def check_dist_staleness(src_dir: Path, dist_dir: Path) -> bool:
-    """dist 最新 mtime 旧于 src 最新 mtime 则 True (产物漂移, F005).
+# 容差: git checkout/clone 按索引序写文件, dist 字母序在 src 前, 克隆后 src 天然新几毫秒;
+# 真实漂移 (改源码未构建) 的间隔远大于 1s, 故小于该差值视为同刻.
+STALENESS_TOLERANCE_SECONDS = 1.0
 
-    口径: 两侧各自取全部文件的最新 mtime 比较; src 目录不存在/无文件则跳过 (False).
+
+def check_dist_staleness(src_dir: Path, dist_dir: Path) -> bool:
+    """dist 最新 mtime 旧于 src 最新 mtime 超过容差则 True (产物漂移, F005).
+
+    口径: 两侧各自取全部文件的最新 mtime 比较, src 超前不足 STALENESS_TOLERANCE_SECONDS
+    视为同刻 (git checkout 顺序抖动, 防克隆后误报); src 目录不存在/无文件则跳过 (False).
     """
     src_mtime = _latest_mtime(src_dir)
     if src_mtime is None:
@@ -42,7 +48,7 @@ def check_dist_staleness(src_dir: Path, dist_dir: Path) -> bool:
     dist_mtime = _latest_mtime(dist_dir)
     if dist_mtime is None:
         return False
-    return dist_mtime < src_mtime
+    return src_mtime - dist_mtime > STALENESS_TOLERANCE_SECONDS
 
 
 def mount_static(app: FastAPI, token: str, spa_dir: Path) -> bool:

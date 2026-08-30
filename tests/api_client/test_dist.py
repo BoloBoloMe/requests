@@ -128,6 +128,25 @@ def test_equal_mtime_no_warning(tmp_path, caplog):
     assert "产物漂移" not in "\n".join(r.getMessage() for r in caplog.records)
 
 
+def test_subsecond_checkout_jitter_no_warning(tmp_path):
+    """TC-011: git checkout 顺序抖动 (src 比 dist 新几毫秒) → False, 不误报.
+
+    克隆/切分支后 dist 文件先于 src 落盘 (索引序), 差值仅毫秒级, 不足容差.
+    """
+    spa = tmp_path / "spa"
+    src_dir, dist_dir = _make_tree(spa, src_ts=1_500_000_000.004, dist_ts=1_500_000_000.0)
+
+    assert check_dist_staleness(src_dir, dist_dir) is False
+
+
+def test_stale_beyond_tolerance_warns(tmp_path):
+    """TC-012: src 超前 dist 超过容差 (1s) → True, 真实漂移仍报警."""
+    spa = tmp_path / "spa"
+    src_dir, dist_dir = _make_tree(spa, src_ts=1_000_000_002.0, dist_ts=1_000_000_000.0)
+
+    assert check_dist_staleness(src_dir, dist_dir) is True
+
+
 def test_missing_src_dir_skips_check(tmp_path, caplog):
     """TC-007: spa/src 不存在 → 跳过不警告."""
     import logging

@@ -58,6 +58,10 @@ def _cmd_serve(args: argparse.Namespace) -> None:
         {"port": port, "token": token, "pid": os.getpid()},
     )
 
+    # 0.0.0.0 对外监听时浏览器入口仍是回环地址, 展示成可点击形式
+    display_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
+    print(f"Web UI: http://{display_host}:{port}/  (数据目录: {data_dir})", flush=True)
+
     config = uvicorn.Config(
         create_app(token, data_dir=data_dir), log_level="info", access_log=False
     )
